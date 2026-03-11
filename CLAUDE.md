@@ -35,8 +35,8 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-12 / FIN-02 | App shell: layout, navbar, design system | ✅ Done |
 | FRO-13 / FIN-03 | Auth system + user management | ✅ Done |
 | FRO-14 / FIN-04 | Master data (Entities, Outlets, EDC) | ✅ Done |
-| FRO-15 / FIN-05 | Bank column config UI | ⏳ Next |
-| FRO-16 / FIN-06 | Cashier file upload + parser | ⏳ Pending |
+| FRO-15 / FIN-05 | Bank column config UI | ✅ Done |
+| FRO-16 / FIN-06 | Cashier file upload + parser | ⏳ Next |
 | FRO-17 / FIN-07 | Bank mutation upload + parser | ⏳ Pending |
 | FRO-18 / FIN-08 | Reconciliation engine | ⏳ Pending |
 | FRO-19 / FIN-09 | Session review UI | ⏳ Pending |
