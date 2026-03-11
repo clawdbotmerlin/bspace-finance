@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Upload, CheckCircle2, AlertCircle, ArrowLeft, FileSpreadsheet } from 'lucide-react'
+import { Upload, CheckCircle2, AlertCircle, ArrowLeft, FileSpreadsheet, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -55,6 +55,14 @@ export default function NewSessionPage() {
   const [bankError, setBankError] = useState('')
   const [uploadedBanks, setUploadedBanks] = useState<UploadedBank[]>([])
 
+  // Step 3 – matching
+  const [matching, setMatching] = useState(false)
+  const [matchError, setMatchError] = useState('')
+  const [matchResult, setMatchResult] = useState<{
+    matched: number; zeros: number; missingInBank: number
+    unexpectedBank: number; amountMismatches: number; discrepancies: number
+  } | null>(null)
+
   useEffect(() => {
     fetch('/api/outlets').then((r) => r.json()).then(setOutlets)
     fetch('/api/bank-configs').then((r) => r.json()).then(setBankConfigs)
@@ -105,11 +113,22 @@ export default function NewSessionPage() {
     }
   }
 
+  async function handleRunMatching() {
+    if (!session) return
+    setMatchError('')
+    setMatching(true)
+    const res = await fetch(`/api/sessions/${session.id}/run-matching`, { method: 'POST' })
+    setMatching(false)
+    if (res.ok) { setMatchResult(await res.json()) }
+    else { const d = await res.json(); setMatchError(d.error ?? 'Gagal menjalankan rekonsiliasi.') }
+  }
+
   function reset() {
     setStep(1); setSession(null)
     setCashierFile(null); setCashierResult(null); setCashierError('')
     setBankFile(null); setBankName(''); setBankError(''); setUploadedBanks([])
     setCreateError(''); setOutletId(''); setSessionDate(''); setBlockType('REG')
+    setMatchResult(null); setMatchError('')
   }
 
   const sessionBadges = session && (
@@ -280,13 +299,51 @@ export default function NewSessionPage() {
           </div>
 
           {uploadedBanks.length > 0 && (
-            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-              <p className="text-xs text-slate-500">
-                Upload semua file mutasi bank, lalu rekonsiliasi otomatis tersedia di halaman Riwayat.
-              </p>
-              <Button variant="outline" size="sm" className="mt-2 w-full" onClick={reset}>
-                Mulai Sesi Baru
-              </Button>
+            <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-3">
+              <div>
+                <p className="text-sm font-medium text-slate-700">Rekonsiliasi Otomatis</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Upload selesai. Jalankan rekonsiliasi untuk mencocokkan data kasir dengan mutasi bank.
+                </p>
+              </div>
+              {matchError && <ErrorMsg msg={matchError} />}
+              {matchResult ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div className="flex items-center gap-1.5 text-green-700">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span><span className="font-semibold">{matchResult.matched}</span> entri cocok</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-500">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 opacity-40" />
+                      <span><span className="font-semibold">{matchResult.zeros}</span> nol / skip</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-red-600">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span><span className="font-semibold">{matchResult.missingInBank}</span> tidak ada di bank</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-red-600">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span><span className="font-semibold">{matchResult.unexpectedBank}</span> tak terduga</span>
+                    </div>
+                    {matchResult.amountMismatches > 0 && (
+                      <div className="flex items-center gap-1.5 text-amber-600 col-span-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span><span className="font-semibold">{matchResult.amountMismatches}</span> selisih jumlah</span>
+                      </div>
+                    )}
+                  </div>
+                  <Button variant="outline" size="sm" className="w-full" onClick={reset}>
+                    Mulai Sesi Baru
+                  </Button>
+                </div>
+              ) : (
+                <Button className="w-full gap-2" onClick={handleRunMatching} disabled={matching}>
+                  {matching
+                    ? <><Loader2 className="w-4 h-4 animate-spin" />Memproses...</>
+                    : 'Jalankan Rekonsiliasi'}
+                </Button>
+              )}
             </div>
           )}
         </div>
