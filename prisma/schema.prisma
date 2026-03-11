@@ -1,0 +1,242 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  admin
+  finance
+  manager
+}
+
+enum SessionStatus {
+  uploading
+  reviewing
+  pending_signoff
+  signed_off
+}
+
+enum BlockType {
+  REG
+  EV
+}
+
+enum PaymentType {
+  QR
+  DEBIT
+  KK
+  CASH
+  VOUCHER
+}
+
+enum MatchStatus {
+  matched
+  unmatched
+  zero
+  prior_period
+  manual
+}
+
+enum DiscrepancyType {
+  missing_in_bank
+  unexpected_bank_entry
+  amount_mismatch
+  prior_period_settlement
+  duplicate
+  other
+}
+
+enum DiscrepancyStatus {
+  open
+  investigating
+  resolved
+}
+
+// ─── Core master data ────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(finance)
+  outletId     String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  outlet               Outlet?                  @relation(fields: [outletId], references: [id])
+  submittedSessions    ReconciliationSession[]  @relation("SubmittedBy")
+  signedOffSessions    ReconciliationSession[]  @relation("SignedOffBy")
+  resolvedDiscrepancies Discrepancy[]           @relation("ResolvedBy")
+  auditLogs            AuditLog[]
+}
+
+model Entity {
+  id        String   @id @default(cuid())
+  legalName String
+  shortName String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  outlets Outlet[]
+}
+
+model Outlet {
+  id        String   @id @default(cuid())
+  entityId  String
+  name      String
+  code      String   @unique
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entity       Entity                   @relation(fields: [entityId], references: [id])
+  edcTerminals EdcTerminal[]
+  sessions     ReconciliationSession[]
+  users        User[]
+}
+
+model EdcTerminal {
+  id            String   @id @default(cuid())
+  outletId      String
+  terminalCode  String
+  bankLabel     String
+  terminalId    String   @unique
+  accountNumber String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  outlet Outlet @relation(fields: [outletId], references: [id])
+}
+
+model BankColumnConfig {
+  id                   String   @id @default(cuid())
+  bankName             String   @unique
+  fileFormat           String   // csv | xls | xlsx
+  skipRowsTop          Int      @default(0)
+  skipRowsBottom       Int      @default(0)
+  dateCol              String?
+  dateFormat           String?
+  amountCol            String?
+  directionCol         String?
+  directionCreditValue String?
+  grossAmountRegex     String?
+  columnMapping        Json?
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// ─── Reconciliation ───────────────────────────────────────────────────────────
+
+model ReconciliationSession {
+  id             String        @id @default(cuid())
+  outletId       String
+  sessionDate    DateTime      @db.Date
+  blockType      BlockType
+  status         SessionStatus @default(uploading)
+  submittedBy    String?
+  submittedAt    DateTime?
+  signedOffBy    String?
+  signedOffAt    DateTime?
+  signOffComment String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  outlet        Outlet        @relation(fields: [outletId], references: [id])
+  submitter     User?         @relation("SubmittedBy", fields: [submittedBy], references: [id])
+  signer        User?         @relation("SignedOffBy", fields: [signedOffBy], references: [id])
+  cashierEntries CashierEntry[]
+  bankMutations  BankMutation[]
+  discrepancies  Discrepancy[]
+  auditLogs      AuditLog[]
+
+  @@unique([outletId, sessionDate, blockType])
+}
+
+model CashierEntry {
+  id                String      @id @default(cuid())
+  sessionId         String
+  terminalCode      String?
+  bankName          String
+  terminalId        String?
+  paymentType       PaymentType
+  amount            Decimal     @db.Decimal(18, 2)
+  notaBill          String?
+  entityNameRaw     String?
+  matchStatus       MatchStatus @default(unmatched)
+  matchedMutationId String?
+  createdAt         DateTime    @default(now())
+
+  session       ReconciliationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  discrepancies Discrepancy[]
+}
+
+model BankMutation {
+  id              String      @id @default(cuid())
+  sessionId       String
+  bankName        String
+  accountNumber   String?
+  transactionDate DateTime    @db.Date
+  description     String?
+  grossAmount     Decimal     @db.Decimal(18, 2)
+  netAmount       Decimal?    @db.Decimal(18, 2)
+  mdrAmount       Decimal?    @db.Decimal(18, 2)
+  direction       String      // CR | DR
+  referenceNo     String?
+  outletRef       String?
+  rawData         Json?
+  matchStatus     MatchStatus @default(unmatched)
+  matchedEntryId  String?     // plain FK, no Prisma relation (bidirectional denorm)
+  createdAt       DateTime    @default(now())
+
+  session       ReconciliationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  discrepancies Discrepancy[]
+}
+
+model Discrepancy {
+  id              String            @id @default(cuid())
+  sessionId       String
+  cashierEntryId  String?
+  bankMutationId  String?
+  discrepancyType DiscrepancyType
+  amountDiff      Decimal?          @db.Decimal(18, 2)
+  notes           String?
+  status          DiscrepancyStatus @default(open)
+  resolvedBy      String?
+  resolvedAt      DateTime?
+  resolutionNotes String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  session      ReconciliationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  cashierEntry CashierEntry?         @relation(fields: [cashierEntryId], references: [id])
+  bankMutation BankMutation?         @relation(fields: [bankMutationId], references: [id])
+  resolver     User?                 @relation("ResolvedBy", fields: [resolvedBy], references: [id])
+}
+
+// ─── Audit ────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  userId         String?
+  action         String
+  entityType     String?
+  entityId       String?
+  payloadSummary String?
+  sessionId      String?
+  createdAt      DateTime @default(now())
+
+  user    User?                  @relation(fields: [userId], references: [id])
+  session ReconciliationSession? @relation(fields: [sessionId], references: [id])
+}

@@ -1,9 +1,30 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# env
+.env*.local
+.env
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# uploads
+/uploads
+
+# python (old)
 __pycache__/
 *.pyc
-.env
 .venv/
 venv/
-*.egg-info/
-dist/
-build/
-.pytest_cache/
