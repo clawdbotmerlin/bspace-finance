@@ -34,8 +34,8 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-11 / FIN-01 | Scaffold Next.js project | ✅ Done |
 | FRO-12 / FIN-02 | App shell: layout, navbar, design system | ✅ Done |
 | FRO-13 / FIN-03 | Auth system + user management | ✅ Done |
-| FRO-14 / FIN-04 | Master data (Entities, Outlets, EDC) | ⏳ Next |
-| FRO-15 / FIN-05 | Bank column config UI | ⏳ Pending |
+| FRO-14 / FIN-04 | Master data (Entities, Outlets, EDC) | ✅ Done |
+| FRO-15 / FIN-05 | Bank column config UI | ⏳ Next |
 | FRO-16 / FIN-06 | Cashier file upload + parser | ⏳ Pending |
 | FRO-17 / FIN-07 | Bank mutation upload + parser | ⏳ Pending |
 | FRO-18 / FIN-08 | Reconciliation engine | ⏳ Pending |
