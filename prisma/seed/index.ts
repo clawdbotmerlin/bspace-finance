@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { hash } from 'bcryptjs'
+import { seedMasterData } from './masterData'
 
 const prisma = new PrismaClient()
 
@@ -9,16 +10,19 @@ async function main() {
   const name = process.env.ADMIN_NAME ?? 'Admin'
 
   const existing = await prisma.user.findUnique({ where: { email } })
-  if (existing) {
+  if (!existing) {
+    const passwordHash = await hash(password, 12)
+    await prisma.user.create({
+      data: { email, name, passwordHash, role: 'admin', isActive: true },
+    })
+    console.log(`Created admin: ${email}`)
+  } else {
     console.log(`Admin already exists: ${email}`)
-    return
   }
 
-  const passwordHash = await hash(password, 12)
-  await prisma.user.create({
-    data: { email, name, passwordHash, role: 'admin', isActive: true },
-  })
-  console.log(`Created admin: ${email}`)
+  console.log('Seeding master data...')
+  await seedMasterData()
+  console.log('Done.')
 }
 
 main()

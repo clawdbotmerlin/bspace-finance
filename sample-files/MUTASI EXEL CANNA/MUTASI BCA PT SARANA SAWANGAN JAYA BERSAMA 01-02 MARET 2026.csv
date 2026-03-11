@@ -1,0 +1,13 @@
+"Informasi Rekening - Mutasi Rekening"," "," "," "," ",
+
+"No. rekening : 8015537511"
+"Nama : SARANA SAWANGAN JAYA BER"
+"Periode : 01/03/2026 - 02/03/2026"
+"Kode Mata Uang : Rp"
+"Tanggal Transaksi","Keterangan","Cabang","Jumlah","Saldo"
+"02/03/2026","SETORAN TUNAI   ","8015","200,000.00 CR","1,195,000.00"
+"Saldo Awal : 995,000.00"
+"Mutasi Debet : 0.00","0"
+"Mutasi Kredit : 200,000.00","1"
+"Saldo Akhir : 1,195,000.00"
+

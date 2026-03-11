@@ -1,0 +1,15 @@
+"Informasi Rekening - Mutasi Rekening"," "," "," "," ",
+
+"No. rekening : 7700920555"
+"Nama : CAHAYA MENTARI BERSINAR"
+"Periode : 01/03/2026 - 02/03/2026"
+"Kode Mata Uang : Rp"
+"Tanggal Transaksi","Keterangan","Cabang","Jumlah","Saldo"
+"02/03/2026","TRSF E-BANKING DB 0203/FTSCY/WS95051 3204000.00  HARIANTO  ","0000","3,204,000.00 DB","4,322,831.00"
+"02/03/2026","TRSF E-BANKING DB 0203/FTLLG/0000100 0080017PT. BANK MA  TRANSFER VIA LLG REF NO PPU =2MHJ  PT. GIOIA CHEESE I ","0000","666,000.00 DB","3,656,831.00"
+"02/03/2026","BA JASA E-BANKING 0203/DMCHG/0000100 BIAYA TRANSFER SME   ","0000","2,900.00 DB","3,653,931.00"
+"Saldo Awal : 7,526,831.00"
+"Mutasi Debet : 3,872,900.00","3"
+"Mutasi Kredit : 0.00","0"
+"Saldo Akhir : 3,653,931.00"
+
