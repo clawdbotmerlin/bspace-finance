@@ -44,16 +44,16 @@ export function Navbar({ userName, userRole }: NavbarProps) {
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-50 h-14 bg-[#0e1726] border-b border-white/10 flex items-center px-4 gap-4">
+      <nav className="fixed top-0 left-0 right-0 z-50 h-12 bg-[#0d1b2a] border-b border-white/[0.08] flex items-stretch px-4">
         {/* Brand */}
-        <Link href="/dashboard" className="flex items-center gap-1 shrink-0 mr-2">
-          <span className="text-white font-bold text-lg tracking-tight">
+        <Link href="/dashboard" className="flex items-center gap-1 shrink-0 mr-4 pr-4 border-r border-white/[0.08]">
+          <span className="text-white font-bold text-[15px] tracking-tight">
             BSpace <span className="text-blue-400">Finance</span>
           </span>
         </Link>
 
         {/* Desktop nav links */}
-        <div className="hidden md:flex items-center gap-1 flex-1">
+        <div className="hidden md:flex items-stretch gap-0 flex-1">
           {visibleNav.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
             return (
@@ -61,29 +61,29 @@ export function Navbar({ userName, userRole }: NavbarProps) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  'flex items-center gap-1.5 px-3 text-[13px] font-medium transition-colors relative',
                   active
-                    ? 'bg-blue-600/20 text-blue-300'
-                    : 'text-slate-300 hover:text-white hover:bg-white/10'
+                    ? 'text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-blue-400 after:rounded-t'
+                    : 'text-slate-400 hover:text-white'
                 )}
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className="h-3.5 w-3.5 shrink-0" />
                 {item.label}
               </Link>
             )
           })}
         </div>
 
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-1 ml-auto">
           {/* Outlet selector */}
           {outlets.length > 0 && (
             <DropdownMenu>
-              <DropdownMenuTrigger className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/15 text-sm text-white transition-colors">
+              <DropdownMenuTrigger className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded hover:bg-white/10 text-white transition-colors border-r border-white/[0.08] mr-1 pr-4">
                 <div className="flex flex-col items-start leading-none">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wide">Outlet</span>
-                  <span className="font-medium">{selectedOutlet?.name ?? '—'}</span>
+                  <span className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Outlet</span>
+                  <span className="text-[12px] font-medium mt-0.5">{selectedOutlet?.name ?? '—'}</span>
                 </div>
-                <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                <ChevronDown className="h-3 w-3 text-slate-500 shrink-0 ml-1" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[200px]">
                 {outlets.map((outlet) => (
@@ -95,8 +95,8 @@ export function Navbar({ userName, userRole }: NavbarProps) {
                       outlet.id === selectedOutlet?.id && 'bg-accent'
                     )}
                   >
-                    <span className="font-medium">{outlet.name}</span>
-                    <span className="text-xs text-muted-foreground">{outlet.entityName}</span>
+                    <span className="font-medium text-xs">{outlet.name}</span>
+                    <span className="text-[11px] text-muted-foreground">{outlet.entityName}</span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -105,26 +105,26 @@ export function Navbar({ userName, userRole }: NavbarProps) {
 
           {/* User menu */}
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-md hover:bg-white/10 transition-colors">
-              <div className="h-7 w-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            <DropdownMenuTrigger className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10 transition-colors">
+              <div className="h-6 w-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
                 {initials(userName)}
               </div>
               <div className="hidden md:flex flex-col items-start leading-none">
-                <span className="text-sm text-white font-medium">{userName}</span>
-                <span className="text-[10px] text-slate-400 capitalize">{roleLabel(userRole)}</span>
+                <span className="text-[12px] text-white font-semibold">{userName}</span>
+                <span className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold mt-0.5">{roleLabel(userRole)}</span>
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[160px]">
               <div className="px-2 py-1.5">
-                <p className="text-sm font-medium">{userName}</p>
-                <Badge variant="outline" className="mt-1 text-[10px]">{roleLabel(userRole)}</Badge>
+                <p className="text-xs font-semibold">{userName}</p>
+                <Badge variant="outline" className="mt-1 text-[9px] uppercase tracking-wide">{roleLabel(userRole)}</Badge>
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                className="text-destructive focus:text-destructive cursor-pointer"
+                className="text-destructive focus:text-destructive cursor-pointer text-xs"
                 onClick={() => signOut({ callbackUrl: '/login' })}
               >
-                <LogOut className="h-4 w-4 mr-2" />
+                <LogOut className="h-3.5 w-3.5 mr-2" />
                 Keluar
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -132,17 +132,17 @@ export function Navbar({ userName, userRole }: NavbarProps) {
 
           {/* Mobile hamburger */}
           <button
-            className="md:hidden p-2 rounded-md text-slate-300 hover:text-white hover:bg-white/10"
+            className="md:hidden p-2 rounded text-slate-400 hover:text-white hover:bg-white/10"
             onClick={() => setMobileOpen(!mobileOpen)}
           >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
         </div>
       </nav>
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="fixed top-14 left-0 right-0 z-40 bg-[#0e1726] border-b border-white/10 md:hidden px-4 py-3 flex flex-col gap-1">
+        <div className="fixed top-12 left-0 right-0 z-40 bg-[#0d1b2a] border-b border-white/[0.08] md:hidden px-4 py-3 flex flex-col gap-0.5">
           {visibleNav.map((item) => {
             const active = pathname === item.href
             return (
@@ -151,28 +151,27 @@ export function Navbar({ userName, userRole }: NavbarProps) {
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
                 className={cn(
-                  'flex items-center gap-2 px-3 py-2.5 rounded-md text-sm font-medium',
-                  active ? 'bg-blue-600/20 text-blue-300' : 'text-slate-300 hover:text-white hover:bg-white/10'
+                  'flex items-center gap-2 px-3 py-2 rounded text-[13px] font-medium',
+                  active ? 'text-white bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'
                 )}
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className="h-3.5 w-3.5" />
                 {item.label}
               </Link>
             )
           })}
-          {/* Outlet selector mobile */}
           {outlets.length > 0 && (
             <>
-              <div className="h-px bg-white/10 my-1" />
+              <div className="h-px bg-white/[0.08] my-2" />
               <div className="px-3 py-1">
-                <p className="text-[10px] text-slate-500 uppercase tracking-wide mb-1">Pilih Outlet</p>
+                <p className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">Pilih Outlet</p>
                 {outlets.map((outlet) => (
                   <button
                     key={outlet.id}
                     onClick={() => { setSelectedOutlet(outlet); setMobileOpen(false) }}
                     className={cn(
-                      'w-full text-left px-2 py-1.5 rounded text-sm',
-                      outlet.id === selectedOutlet?.id ? 'text-blue-300 font-medium' : 'text-slate-300 hover:text-white'
+                      'w-full text-left px-2 py-1.5 rounded text-[12px]',
+                      outlet.id === selectedOutlet?.id ? 'text-blue-300 font-semibold' : 'text-slate-400 hover:text-white'
                     )}
                   >
                     {outlet.name}

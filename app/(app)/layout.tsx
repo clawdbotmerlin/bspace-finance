@@ -17,7 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <OutletProvider>
       <Navbar userName={userName} userRole={userRole} />
-      <main className="pt-14 min-h-screen bg-slate-50">
+      <main className="pt-12 min-h-screen bg-[#f0f2f5]">
         {children}
       </main>
     </OutletProvider>
