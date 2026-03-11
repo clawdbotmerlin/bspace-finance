@@ -37,8 +37,8 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-14 / FIN-04 | Master data (Entities, Outlets, EDC) | ✅ Done |
 | FRO-15 / FIN-05 | Bank column config UI | ✅ Done |
 | FRO-16 / FIN-06 | Cashier file upload + parser | ✅ Done |
-| FRO-17 / FIN-07 | Bank mutation upload + parser | ⏳ Next |
-| FRO-18 / FIN-08 | Reconciliation engine | ⏳ Pending |
+| FRO-17 / FIN-07 | Bank mutation upload + parser | ✅ Done |
+| FRO-18 / FIN-08 | Reconciliation engine | ✅ Done |
 | FRO-19 / FIN-09 | Session review UI | ⏳ Pending |
 | FRO-20 / FIN-10 | Sign-off flow | ⏳ Pending |
 | FRO-21 / FIN-11 | History & session list | ⏳ Pending |
