@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Pencil, Building2, Store, CreditCard } from 'lucide-react'
+import { Plus, Pencil, Building2, Store, CreditCard, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -47,7 +47,23 @@ interface EdcTerminal {
   outletCode: string
 }
 
-type Tab = 'entities' | 'outlets' | 'terminals'
+interface BankConfig {
+  id: string
+  bankName: string
+  fileFormat: string
+  skipRowsTop: number
+  skipRowsBottom: number
+  dateCol: string | null
+  dateFormat: string | null
+  amountCol: string | null
+  directionCol: string | null
+  directionCreditValue: string | null
+  grossAmountRegex: string | null
+  columnMapping: Record<string, unknown> | null
+  isActive: boolean
+}
+
+type Tab = 'entities' | 'outlets' | 'terminals' | 'bankconfigs'
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -56,18 +72,21 @@ export default function MasterDataPage() {
   const [entities, setEntities] = useState<Entity[]>([])
   const [outlets, setOutlets] = useState<Outlet[]>([])
   const [terminals, setTerminals] = useState<EdcTerminal[]>([])
+  const [bankConfigs, setBankConfigs] = useState<BankConfig[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    const [e, o, t] = await Promise.all([
+    const [e, o, t, b] = await Promise.all([
       fetch('/api/entities').then((r) => r.json()),
       fetch('/api/outlets').then((r) => r.json()),
       fetch('/api/edc-terminals').then((r) => r.json()),
+      fetch('/api/bank-configs').then((r) => r.json()),
     ])
     setEntities(e)
     setOutlets(o)
     setTerminals(t)
+    setBankConfigs(b)
     setLoading(false)
   }, [])
 
@@ -77,13 +96,14 @@ export default function MasterDataPage() {
     { id: 'entities', label: 'Entitas', icon: Building2, count: entities.length },
     { id: 'outlets', label: 'Outlet', icon: Store, count: outlets.length },
     { id: 'terminals', label: 'Terminal EDC', icon: CreditCard, count: terminals.length },
+    { id: 'bankconfigs', label: 'Konfigurasi Bank', icon: Settings2, count: bankConfigs.length },
   ]
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Data Master</h1>
-        <p className="text-slate-500 text-sm mt-0.5">Kelola entitas, outlet, dan terminal EDC.</p>
+        <p className="text-slate-500 text-sm mt-0.5">Kelola entitas, outlet, terminal EDC, dan konfigurasi parser bank.</p>
       </div>
 
       {/* Tab bar */}
@@ -123,6 +143,9 @@ export default function MasterDataPage() {
           )}
           {tab === 'terminals' && (
             <TerminalsTab terminals={terminals} outlets={outlets} onRefresh={fetchAll} />
+          )}
+          {tab === 'bankconfigs' && (
+            <BankConfigsTab configs={bankConfigs} onRefresh={fetchAll} />
           )}
         </>
       )}
@@ -639,6 +662,258 @@ function TerminalDialog({ terminal, outlets, open, onClose, onSaved }: {
               <Label>No. Rekening <span className="text-slate-400 font-normal">(opsional)</span></Label>
               <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="1462392995" className="font-mono num" />
             </div>
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Batal</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Bank Configs Tab ─────────────────────────────────────────────────────────
+
+const FORMAT_LABELS: Record<string, string> = { csv: 'CSV', xls: 'XLS', xlsx: 'XLSX' }
+const FORMAT_COLORS: Record<string, string> = {
+  csv: 'bg-green-50 text-green-700',
+  xls: 'bg-orange-50 text-orange-700',
+  xlsx: 'bg-emerald-50 text-emerald-700',
+}
+const BANK_COLORS: Record<string, string> = {
+  BCA: 'bg-blue-50 text-blue-700',
+  BNI: 'bg-orange-50 text-orange-700',
+  BRI: 'bg-sky-50 text-sky-700',
+  MANDIRI: 'bg-yellow-50 text-yellow-700',
+}
+
+function BankConfigsTab({ configs, onRefresh }: { configs: BankConfig[]; onRefresh: () => void }) {
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editConfig, setEditConfig] = useState<BankConfig | null>(null)
+
+  async function toggleActive(c: BankConfig) {
+    await fetch(`/api/bank-configs/${c.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: !c.isActive }),
+    })
+    onRefresh()
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-slate-500">{configs.length} konfigurasi bank</p>
+        <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
+          <Plus className="h-3.5 w-3.5" />
+          Tambah Konfigurasi
+        </Button>
+      </div>
+
+      <div className="space-y-3">
+        {configs.length === 0 ? (
+          <div className="rounded-lg border bg-white px-4 py-8 text-center text-slate-400">
+            Belum ada konfigurasi bank.
+          </div>
+        ) : configs.map((c) => (
+          <div key={c.id} className={cn('rounded-lg border bg-white', !c.isActive && 'opacity-50')}>
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <div className="flex items-center gap-3">
+                <span className={cn('text-xs font-bold px-2 py-0.5 rounded', BANK_COLORS[c.bankName] ?? 'bg-slate-100 text-slate-600')}>
+                  {c.bankName}
+                </span>
+                <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded', FORMAT_COLORS[c.fileFormat] ?? 'bg-slate-100 text-slate-600')}>
+                  {FORMAT_LABELS[c.fileFormat] ?? c.fileFormat.toUpperCase()}
+                </span>
+                <Badge variant={c.isActive ? 'success' : 'outline'}>
+                  {c.isActive ? 'Aktif' : 'Nonaktif'}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setEditConfig(c)} className="p-1.5 rounded hover:bg-slate-100 text-slate-500">
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button onClick={() => toggleActive(c)} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 text-[11px] font-semibold">
+                  {c.isActive ? 'Off' : 'On'}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-0 divide-x divide-y text-xs">
+              {([
+                ['Skip Baris (Atas)', String(c.skipRowsTop)],
+                ['Skip Baris (Bawah)', String(c.skipRowsBottom)],
+                ['Kolom Tanggal', c.dateCol ?? '—'],
+                ['Format Tanggal', c.dateFormat ?? '—'],
+                ['Kolom Jumlah', c.amountCol ?? '—'],
+                ['Kolom Arah', c.directionCol ?? '—'],
+                ['Nilai Kredit', c.directionCreditValue ?? '—'],
+                ['Regex Jumlah', c.grossAmountRegex ?? '—'],
+              ] as [string, string][]).map(([label, value]) => (
+                <div key={label} className="px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">{label}</p>
+                  <p className="font-mono text-slate-700 truncate">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            {c.columnMapping && (
+              <div className="px-4 py-2.5 border-t bg-slate-50 rounded-b-lg">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Column Mapping (JSON)</p>
+                <pre className="text-[11px] text-slate-600 font-mono whitespace-pre-wrap break-all leading-relaxed">
+                  {JSON.stringify(c.columnMapping, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <BankConfigDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSaved={() => { setCreateOpen(false); onRefresh() }}
+      />
+      {editConfig && (
+        <BankConfigDialog
+          config={editConfig}
+          open
+          onClose={() => setEditConfig(null)}
+          onSaved={() => { setEditConfig(null); onRefresh() }}
+        />
+      )}
+    </>
+  )
+}
+
+function BankConfigDialog({ config, open, onClose, onSaved }: {
+  config?: BankConfig
+  open: boolean
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [bankName, setBankName] = useState(config?.bankName ?? '')
+  const [fileFormat, setFileFormat] = useState(config?.fileFormat ?? 'csv')
+  const [skipRowsTop, setSkipRowsTop] = useState(String(config?.skipRowsTop ?? 0))
+  const [skipRowsBottom, setSkipRowsBottom] = useState(String(config?.skipRowsBottom ?? 0))
+  const [dateCol, setDateCol] = useState(config?.dateCol ?? '')
+  const [dateFormat, setDateFormat] = useState(config?.dateFormat ?? '')
+  const [amountCol, setAmountCol] = useState(config?.amountCol ?? '')
+  const [directionCol, setDirectionCol] = useState(config?.directionCol ?? '')
+  const [directionCreditValue, setDirectionCreditValue] = useState(config?.directionCreditValue ?? '')
+  const [grossAmountRegex, setGrossAmountRegex] = useState(config?.grossAmountRegex ?? '')
+  const [columnMappingRaw, setColumnMappingRaw] = useState(
+    config?.columnMapping ? JSON.stringify(config.columnMapping, null, 2) : ''
+  )
+  const [jsonError, setJsonError] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setJsonError('')
+    let columnMapping = null
+    if (columnMappingRaw.trim()) {
+      try { columnMapping = JSON.parse(columnMappingRaw) }
+      catch { setJsonError('JSON tidak valid.'); return }
+    }
+    setSaving(true)
+    const url = config ? `/api/bank-configs/${config.id}` : '/api/bank-configs'
+    const method = config ? 'PUT' : 'POST'
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bankName, fileFormat,
+        skipRowsTop: parseInt(skipRowsTop) || 0,
+        skipRowsBottom: parseInt(skipRowsBottom) || 0,
+        dateCol: dateCol || null, dateFormat: dateFormat || null,
+        amountCol: amountCol || null, directionCol: directionCol || null,
+        directionCreditValue: directionCreditValue || null,
+        grossAmountRegex: grossAmountRegex || null,
+        columnMapping,
+      }),
+    })
+    setSaving(false)
+    if (res.ok) { onSaved() }
+    else { const d = await res.json(); setError(d.error ?? 'Gagal menyimpan.') }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{config ? `Edit Konfigurasi — ${config.bankName}` : 'Tambah Konfigurasi Bank'}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Nama Bank</Label>
+              <Input value={bankName} onChange={(e) => setBankName(e.target.value.toUpperCase())} required placeholder="BCA" className="font-mono" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Format File</Label>
+              <Select value={fileFormat} onValueChange={setFileFormat}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="csv">CSV</SelectItem>
+                  <SelectItem value="xls">XLS</SelectItem>
+                  <SelectItem value="xlsx">XLSX</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Skip Baris Atas</Label>
+              <Input type="number" min={0} value={skipRowsTop} onChange={(e) => setSkipRowsTop(e.target.value)} className="font-mono" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Skip Baris Bawah</Label>
+              <Input type="number" min={0} value={skipRowsBottom} onChange={(e) => setSkipRowsBottom(e.target.value)} className="font-mono" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Kolom Tanggal <span className="text-slate-400 font-normal">(indeks)</span></Label>
+              <Input value={dateCol} onChange={(e) => setDateCol(e.target.value)} placeholder="0" className="font-mono" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Format Tanggal</Label>
+              <Input value={dateFormat} onChange={(e) => setDateFormat(e.target.value)} placeholder="DD/MM/YYYY" className="font-mono" />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label>Kolom Jumlah <span className="text-slate-400 font-normal">(opsional)</span></Label>
+              <Input value={amountCol} onChange={(e) => setAmountCol(e.target.value)} placeholder="3" className="font-mono" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Kolom Arah <span className="text-slate-400 font-normal">(opsional)</span></Label>
+              <Input value={directionCol} onChange={(e) => setDirectionCol(e.target.value)} placeholder="22" className="font-mono" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Nilai Kredit</Label>
+              <Input value={directionCreditValue} onChange={(e) => setDirectionCreditValue(e.target.value)} placeholder="CR" className="font-mono" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Regex Jumlah <span className="text-slate-400 font-normal">(opsional)</span></Label>
+            <Input value={grossAmountRegex} onChange={(e) => setGrossAmountRegex(e.target.value)} placeholder="([\d,]+\.\d+)\s+(CR|DB)" className="font-mono text-xs" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Column Mapping JSON <span className="text-slate-400 font-normal">(opsional)</span></Label>
+            <textarea
+              value={columnMappingRaw}
+              onChange={(e) => setColumnMappingRaw(e.target.value)}
+              rows={8}
+              placeholder={'{\n  "type": "dual_column",\n  "debitCol": 7,\n  "creditCol": 8\n}'}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-[11px] font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+            />
+            {jsonError && <p className="text-xs text-destructive">{jsonError}</p>}
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>

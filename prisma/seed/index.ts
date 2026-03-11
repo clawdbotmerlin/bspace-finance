@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { hash } from 'bcryptjs'
 import { seedMasterData } from './masterData'
+import { seedBankConfigs } from './bankConfigs'
 
 const prisma = new PrismaClient()
 
@@ -22,6 +23,8 @@ async function main() {
 
   console.log('Seeding master data...')
   await seedMasterData()
+  console.log('Seeding bank configs...')
+  await seedBankConfigs()
   console.log('Done.')
 }
 
