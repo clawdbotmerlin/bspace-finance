@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/guards'
 import { prisma } from '@/lib/db'
-import { Prisma } from '@prisma/client'
 import { runMatchingEngine } from '@/lib/engine/matching'
 
 export const POST = withAuth(async (req: NextRequest) => {
@@ -61,7 +60,7 @@ export const POST = withAuth(async (req: NextRequest) => {
   const matchesWithDiff = result.matches.filter((m: typeof result.matches[number]) => Math.round(Math.abs(m.amountDiff)) > 0)
 
   // Apply results atomically
-  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  await prisma.$transaction(async (tx: typeof prisma) => {
     // Matched pairs
     for (const m of result.matches) {
       await tx.cashierEntry.update({
