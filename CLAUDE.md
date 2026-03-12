@@ -39,7 +39,7 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-16 / FIN-06 | Cashier file upload + parser | ✅ Done |
 | FRO-17 / FIN-07 | Bank mutation upload + parser | ✅ Done |
 | FRO-18 / FIN-08 | Reconciliation engine | ✅ Done |
-| FRO-19 / FIN-09 | Session review UI | ⏳ Pending |
+| FRO-19 / FIN-09 | Session review UI | ✅ Done |
 | FRO-20 / FIN-10 | Sign-off flow | ⏳ Pending |
 | FRO-21 / FIN-11 | History & session list | ⏳ Pending |
 | FRO-22 / FIN-12 | Dashboard metrics | ⏳ Pending |
@@ -55,7 +55,8 @@ app/
   (app)/          ← authenticated routes (protected by middleware)
     layout.tsx    ← OutletProvider + Navbar wrapper
     dashboard/
-    sessions/new/
+    sessions/new/        ← 3-step upload wizard
+    sessions/[id]/review/ ← FIN-09: review matched/unmatched/discrepancies
     history/
     admin/
       users/      ← user management (admin only)
@@ -68,6 +69,14 @@ app/
     outlets/              ← GET outlets for current session
     users/                ← GET list, POST create (admin only)
     users/[id]/           ← PUT edit role / toggle isActive (admin only)
+    sessions/             ← GET list, POST create
+    sessions/[id]/        ← GET session detail
+    sessions/[id]/upload/ ← POST cashier + bank mutation files
+    sessions/[id]/run-matching/ ← POST run reconciliation engine
+    sessions/[id]/matches/      ← GET matched pairs + zero count
+    sessions/[id]/discrepancies/           ← GET all discrepancies
+    sessions/[id]/discrepancies/[did]/     ← PUT update discrepancy status/notes
+    sessions/[id]/submit/       ← POST transition to pending_signoff
 
 components/
   layout/Navbar.tsx       ← dark topbar, role-filtered nav, outlet selector
@@ -117,8 +126,9 @@ prisma/
 - Outlet selector in navbar → stored in `OutletProvider` context + sessionStorage
 - All text in Indonesian (Bahasa Indonesia)
 
-## Notes for Next Ticket (FIN-04: Master Data)
-- CRUD for Entities, Outlets, EdcTerminals
-- Seed script should also seed sample entities/outlets from the real BSpace data
-- The entities/outlets are: (to be confirmed with user — check sample-files/ directory)
-- Admin-only pages under `/admin/master-data`
+## Notes for Next Ticket (FIN-10: Sign-off Flow)
+- Manager reviews sessions in `pending_signoff` status
+- Sign-off UI: view session review data (read-only) + approve/reject
+- On sign-off: session status → `signed_off`, set signedOffBy, signedOffAt, signOffComment
+- Consider: reject flow returns to `reviewing` status
+- Manager role access for sign-off pages

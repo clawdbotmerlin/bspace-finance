@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Upload, CheckCircle2, AlertCircle, ArrowLeft, FileSpreadsheet, Loader2 } from 'lucide-react'
+import Link from 'next/link'
+import { Upload, CheckCircle2, AlertCircle, ArrowLeft, FileSpreadsheet, Loader2, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -333,6 +334,12 @@ export default function NewSessionPage() {
                       </div>
                     )}
                   </div>
+                  <Link href={`/sessions/${session.id}/review`}>
+                    <Button className="w-full gap-1.5">
+                      <Eye className="w-4 h-4" />
+                      Lihat Hasil Review
+                    </Button>
+                  </Link>
                   <Button variant="outline" size="sm" className="w-full" onClick={reset}>
                     Mulai Sesi Baru
                   </Button>
