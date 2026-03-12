@@ -60,7 +60,8 @@ export const POST = withAuth(async (req: NextRequest) => {
   const matchesWithDiff = result.matches.filter((m: typeof result.matches[number]) => Math.round(Math.abs(m.amountDiff)) > 0)
 
   // Apply results atomically
-  await prisma.$transaction(async (tx: typeof prisma) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await prisma.$transaction(async (tx: any) => {
     // Matched pairs
     for (const m of result.matches) {
       await tx.cashierEntry.update({
