@@ -10,7 +10,7 @@ export const GET = withAuth(async () => {
     orderBy: [{ outlet: { name: 'asc' } }, { terminalCode: 'asc' }, { bankLabel: 'asc' }],
   })
   return NextResponse.json(
-    terminals.map((t) => ({
+    terminals.map((t: typeof terminals[number]) => ({
       id: t.id,
       terminalCode: t.terminalCode,
       bankLabel: t.bankLabel,
