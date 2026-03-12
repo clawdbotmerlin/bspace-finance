@@ -27,7 +27,7 @@ export const POST = withAuth(async (req: NextRequest) => {
 
   if (result.entries.length > 0) {
     await prisma.cashierEntry.createMany({
-      data: result.entries.map((e) => ({
+      data: result.entries.map((e: typeof result.entries[number]) => ({
         sessionId,
         terminalCode: e.terminalCode,
         bankName: e.bankName,

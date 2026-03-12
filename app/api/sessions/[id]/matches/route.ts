@@ -26,9 +26,12 @@ export const GET = withAuth(async (req: NextRequest) => {
     orderBy: { createdAt: 'asc' },
   })
 
+  type Entry = typeof entries[number]
+  type Mutation = Awaited<ReturnType<typeof prisma.bankMutation.findMany>>[number]
+
   // Batch fetch linked bank mutations
   const mutationIds = entries
-    .map((e) => e.matchedMutationId)
+    .map((e: Entry) => e.matchedMutationId)
     .filter((id): id is string => id !== null)
 
   const mutations = await prisma.bankMutation.findMany({
@@ -46,9 +49,9 @@ export const GET = withAuth(async (req: NextRequest) => {
     },
   })
 
-  const mutMap = new Map(mutations.map((m) => [m.id, m]))
+  const mutMap = new Map(mutations.map((m: typeof mutations[number]) => [m.id, m]))
 
-  const pairs = entries.map((e) => {
+  const pairs = entries.map((e: Entry) => {
     const mut = e.matchedMutationId ? mutMap.get(e.matchedMutationId) ?? null : null
     return {
       cashierEntry: e,

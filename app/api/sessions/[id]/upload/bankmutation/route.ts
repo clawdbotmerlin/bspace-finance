@@ -39,7 +39,7 @@ export const POST = withAuth(async (req: NextRequest) => {
 
   if (result.mutations.length > 0) {
     await prisma.bankMutation.createMany({
-      data: result.mutations.map((m) => ({
+      data: result.mutations.map((m: typeof result.mutations[number]) => ({
         sessionId,
         bankName: m.bankName,
         accountNumber: m.accountNumber,

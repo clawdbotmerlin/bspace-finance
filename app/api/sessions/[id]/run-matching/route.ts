@@ -36,28 +36,28 @@ export const POST = withAuth(async (req: NextRequest) => {
 
   // Run the pure matching engine
   const result = runMatchingEngine(
-    cashierEntries.map((e) => ({
+    cashierEntries.map((e: typeof cashierEntries[number]) => ({
       id: e.id,
       bankName: e.bankName,
       terminalId: e.terminalId,
       paymentType: e.paymentType,
       amount: Number(e.amount),
     })),
-    bankMutations.map((m) => ({
+    bankMutations.map((m: typeof bankMutations[number]) => ({
       id: m.id,
       bankName: m.bankName,
       accountNumber: m.accountNumber,
       grossAmount: Number(m.grossAmount),
       direction: m.direction,
     })),
-    edcTerminals.map((t) => ({
+    edcTerminals.map((t: typeof edcTerminals[number]) => ({
       bankLabel: t.bankLabel,
       terminalId: t.terminalId,
       accountNumber: t.accountNumber,
     })),
   )
 
-  const matchesWithDiff = result.matches.filter((m) => Math.round(Math.abs(m.amountDiff)) > 0)
+  const matchesWithDiff = result.matches.filter((m: typeof result.matches[number]) => Math.round(Math.abs(m.amountDiff)) > 0)
 
   // Apply results atomically
   await prisma.$transaction(async (tx) => {
@@ -84,7 +84,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     // Discrepancies — amount mismatches
     if (matchesWithDiff.length > 0) {
       await tx.discrepancy.createMany({
-        data: matchesWithDiff.map((m) => ({
+        data: matchesWithDiff.map((m: typeof matchesWithDiff[number]) => ({
           sessionId,
           cashierEntryId: m.cashierEntryId,
           bankMutationId: m.bankMutationId,
