@@ -32,7 +32,7 @@ export const GET = withAuth(async (req: NextRequest) => {
   // Batch fetch linked bank mutations
   const mutationIds = entries
     .map((e: Entry) => e.matchedMutationId)
-    .filter((id): id is string => id !== null)
+    .filter((id: string | null): id is string => id !== null)
 
   const mutations = await prisma.bankMutation.findMany({
     where: { id: { in: mutationIds } },
