@@ -11,7 +11,7 @@ export const GET = withAuth(async () => {
     orderBy: { name: 'asc' },
   })
   return NextResponse.json(
-    outlets.map((o) => ({
+    outlets.map((o: typeof outlets[number]) => ({
       id: o.id,
       name: o.name,
       code: o.code,
