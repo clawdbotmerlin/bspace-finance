@@ -8,6 +8,8 @@ export const GET = withAuth(async (req: NextRequest) => {
     where: { id },
     include: {
       outlet: { select: { name: true, code: true } },
+      submitter: { select: { name: true } },
+      signer: { select: { name: true } },
       _count: { select: { cashierEntries: true, bankMutations: true } },
     },
   })

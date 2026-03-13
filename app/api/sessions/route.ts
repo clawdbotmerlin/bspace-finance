@@ -7,6 +7,7 @@ export const GET = withAuth(async () => {
     orderBy: { sessionDate: 'desc' },
     include: {
       outlet: { select: { name: true, code: true } },
+      submitter: { select: { name: true } },
       _count: { select: { cashierEntries: true, bankMutations: true } },
     },
   })

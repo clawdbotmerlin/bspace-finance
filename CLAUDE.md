@@ -40,7 +40,7 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-17 / FIN-07 | Bank mutation upload + parser | ✅ Done |
 | FRO-18 / FIN-08 | Reconciliation engine | ✅ Done |
 | FRO-19 / FIN-09 | Session review UI | ✅ Done |
-| FRO-20 / FIN-10 | Sign-off flow | ⏳ Pending |
+| FRO-20 / FIN-10 | Sign-off flow | ✅ Done |
 | FRO-21 / FIN-11 | History & session list | ⏳ Pending |
 | FRO-22 / FIN-12 | Dashboard metrics | ⏳ Pending |
 | FRO-23 / FIN-13 | PDF report generation | ⏳ Pending |
@@ -57,6 +57,8 @@ app/
     dashboard/
     sessions/new/        ← 3-step upload wizard
     sessions/[id]/review/ ← FIN-09: review matched/unmatched/discrepancies
+    sessions/[id]/signoff/ ← FIN-10: sign-off detail (manager approve/reject)
+    signoff/              ← FIN-10: sign-off queue (pending_signoff sessions)
     history/
     admin/
       users/      ← user management (admin only)
@@ -77,6 +79,7 @@ app/
     sessions/[id]/discrepancies/           ← GET all discrepancies
     sessions/[id]/discrepancies/[did]/     ← PUT update discrepancy status/notes
     sessions/[id]/submit/       ← POST transition to pending_signoff
+    sessions/[id]/signoff/      ← POST approve/reject (manager)
 
 components/
   layout/Navbar.tsx       ← dark topbar, role-filtered nav, outlet selector
@@ -126,9 +129,8 @@ prisma/
 - Outlet selector in navbar → stored in `OutletProvider` context + sessionStorage
 - All text in Indonesian (Bahasa Indonesia)
 
-## Notes for Next Ticket (FIN-10: Sign-off Flow)
-- Manager reviews sessions in `pending_signoff` status
-- Sign-off UI: view session review data (read-only) + approve/reject
-- On sign-off: session status → `signed_off`, set signedOffBy, signedOffAt, signOffComment
-- Consider: reject flow returns to `reviewing` status
-- Manager role access for sign-off pages
+## Notes for Next Ticket (FIN-11: History & Session List)
+- Full history/session list page at `/history`
+- Filter by outlet, date range, status, blockType
+- Shows all sessions (all statuses) with links to review/signoff pages
+- Accessible to admin, finance, manager (already in nav)

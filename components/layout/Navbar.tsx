@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { ChevronDown, LayoutDashboard, Plus, History, Database, ScrollText, Users, LogOut, Menu, X } from 'lucide-react'
+import { ChevronDown, LayoutDashboard, Plus, History, Database, ScrollText, Users, LogOut, Menu, X, ClipboardCheck } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'finance', 'manager'] },
   { href: '/sessions/new', label: 'Rekonsiliasi Baru', icon: Plus, roles: ['admin', 'finance'] },
   { href: '/history', label: 'Riwayat', icon: History, roles: ['admin', 'finance', 'manager'] },
+  { href: '/signoff', label: 'Persetujuan', icon: ClipboardCheck, roles: ['admin', 'manager'] },
   { href: '/admin/master-data', label: 'Data Master', icon: Database, roles: ['admin'] },
   { href: '/admin/audit-log', label: 'Log Audit', icon: ScrollText, roles: ['admin'] },
   { href: '/admin/users', label: 'Pengguna', icon: Users, roles: ['admin'] },

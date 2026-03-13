@@ -6,5 +6,7 @@ export const config = {
     '/sessions/:path*',
     '/history/:path*',
     '/admin/:path*',
+    '/signoff',
+    '/signoff/:path*',
   ],
 }
