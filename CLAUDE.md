@@ -41,7 +41,7 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-18 / FIN-08 | Reconciliation engine | ✅ Done |
 | FRO-19 / FIN-09 | Session review UI | ✅ Done |
 | FRO-20 / FIN-10 | Sign-off flow | ✅ Done |
-| FRO-21 / FIN-11 | History & session list | ⏳ Pending |
+| FRO-21 / FIN-11 | History & session list | ✅ Done |
 | FRO-22 / FIN-12 | Dashboard metrics | ⏳ Pending |
 | FRO-23 / FIN-13 | PDF report generation | ⏳ Pending |
 | FRO-24 / FIN-14 | Audit log UI | ⏳ Pending |
@@ -59,7 +59,7 @@ app/
     sessions/[id]/review/ ← FIN-09: review matched/unmatched/discrepancies
     sessions/[id]/signoff/ ← FIN-10: sign-off detail (manager approve/reject)
     signoff/              ← FIN-10: sign-off queue (pending_signoff sessions)
-    history/
+    history/               ← FIN-11: full session list with filters & sorting
     admin/
       users/      ← user management (admin only)
       master-data/
@@ -129,8 +129,10 @@ prisma/
 - Outlet selector in navbar → stored in `OutletProvider` context + sessionStorage
 - All text in Indonesian (Bahasa Indonesia)
 
-## Notes for Next Ticket (FIN-11: History & Session List)
-- Full history/session list page at `/history`
-- Filter by outlet, date range, status, blockType
-- Shows all sessions (all statuses) with links to review/signoff pages
-- Accessible to admin, finance, manager (already in nav)
+## Notes for Next Ticket (FIN-12: Dashboard Metrics)
+- Dashboard overview at `/dashboard` for all roles
+- Key metrics: total sessions, sessions by status, recent activity
+- Stats cards: Selesai (signed_off), Menunggu TTD, Review, Total Kasir & Bank entries
+- Charts optional for now — focus on stat cards + recent sessions table
+- Use same data from GET /api/sessions, compute metrics client-side
+
