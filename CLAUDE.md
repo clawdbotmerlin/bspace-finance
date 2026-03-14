@@ -46,7 +46,7 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-23 / FIN-13 | PDF report generation | ✅ Done |
 | FRO-24 / FIN-14 | Audit log UI | ✅ Done |
 | FRO-25 / FIN-15 | Discrepancy management | ✅ Done |
-| FRO-26 / FIN-16 | Notifications | ⏳ Pending |
+| FRO-26 / FIN-16 | Notifications | ✅ Done |
 | FRO-27       | Self-healing parser (LLM re-config) | ⏳ Pending |
 
 ## Key File Map
@@ -84,9 +84,10 @@ app/
     sessions/[id]/report/       ← GET generate PDF report (signed_off only)
     audit-logs/                 ← GET paginated audit log (admin only, filter by action/entityType/date)
     discrepancies/              ← GET cross-session discrepancies + summary stats (admin+finance)
+    notifications/              ← GET role-aware counts (pendingSignoff, openDiscrepancies)
 
 components/
-  layout/Navbar.tsx       ← dark topbar, role-filtered nav, outlet selector
+  layout/Navbar.tsx       ← dark topbar, role-filtered nav, outlet selector, notification bell
   providers/OutletProvider.tsx  ← React context for outlet selection
   ui/                     ← shadcn-style: button, badge, input, label,
                             dialog, dropdown-menu, select, separator
@@ -133,11 +134,10 @@ prisma/
 - Outlet selector in navbar → stored in `OutletProvider` context + sessionStorage
 - All text in Indonesian (Bahasa Indonesia)
 
-## Notes for Next Ticket (FIN-16: Notifications)
-- In-app notification bell in Navbar for pending sign-offs and open discrepancies
-- GET /api/notifications or derive counts from existing session/discrepancy queries
-- Badge count on navbar bell icon showing total unread items
-- Dropdown list: each item links to relevant page (signoff queue / discrepancy page)
-- Consider per-user read state (mark as read) vs always-live counts
-- Role-aware: managers see sign-off notifications, finance sees discrepancy alerts
+## Notes for Next Ticket (FRO-27: Self-healing parser / LLM re-config)
+- When cashier Excel upload fails to parse (no rows extracted), trigger LLM re-config flow
+- LLM analyzes the sheet headers and suggests new BankColumnConfig values
+- User reviews and accepts/rejects the suggested config before re-parsing
+- Consider using Claude API (claude-3-5-haiku) for column mapping suggestions
+- Store config per bankName; once accepted, persists for future uploads from same bank
 

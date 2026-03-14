@@ -3,8 +3,11 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { ChevronDown, LayoutDashboard, Plus, History, Database, ScrollText, Users, LogOut, Menu, X, ClipboardCheck, AlertTriangle } from 'lucide-react'
-import { useState } from 'react'
+import {
+  ChevronDown, LayoutDashboard, Plus, History, Database, ScrollText,
+  Users, LogOut, Menu, X, ClipboardCheck, AlertTriangle, Bell, ClipboardList,
+} from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -18,6 +21,12 @@ interface NavbarProps {
   userRole: string
 }
 
+interface NotifCounts {
+  pendingSignoff: number
+  openDiscrepancies: number
+  total: number
+}
+
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'finance', 'manager'] },
   { href: '/sessions/new', label: 'Rekonsiliasi Baru', icon: Plus, roles: ['admin', 'finance'] },
@@ -29,6 +38,8 @@ const NAV_ITEMS = [
   { href: '/admin/users', label: 'Pengguna', icon: Users, roles: ['admin'] },
 ]
 
+const POLL_MS = 60_000
+
 function roleLabel(role: string) {
   return { admin: 'Admin', finance: 'Finance', manager: 'Manager' }[role] ?? role
 }
@@ -37,10 +48,35 @@ function initials(name: string) {
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
 }
 
+function NotifBadge({ n }: { n: number }) {
+  if (n <= 0) return null
+  return (
+    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none pointer-events-none">
+      {n > 99 ? '99+' : n}
+    </span>
+  )
+}
+
 export function Navbar({ userName, userRole }: NavbarProps) {
   const pathname = usePathname()
   const { outlets, selectedOutlet, setSelectedOutlet } = useOutlet()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [notifs, setNotifs] = useState<NotifCounts>({ pendingSignoff: 0, openDiscrepancies: 0, total: 0 })
+
+  const fetchNotifs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/notifications')
+      if (res.ok) setNotifs(await res.json())
+    } catch {
+      // non-critical — ignore errors
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchNotifs()
+    const id = setInterval(fetchNotifs, POLL_MS)
+    return () => clearInterval(id)
+  }, [fetchNotifs])
 
   const visibleNav = NAV_ITEMS.filter((item) => item.roles.includes(userRole))
 
@@ -105,6 +141,60 @@ export function Navbar({ userName, userRole }: NavbarProps) {
             </DropdownMenu>
           )}
 
+          {/* Notification bell */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="hidden md:flex relative p-2 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+              <Bell className="h-4 w-4" />
+              <NotifBadge n={notifs.total} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[260px]">
+              <div className="px-3 py-2 border-b">
+                <p className="text-xs font-semibold text-foreground">Notifikasi</p>
+              </div>
+              {notifs.total === 0 ? (
+                <div className="px-3 py-4 text-center">
+                  <p className="text-xs text-muted-foreground">Semua sudah beres 🎉</p>
+                </div>
+              ) : (
+                <>
+                  {notifs.pendingSignoff > 0 && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/signoff" className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer">
+                        <div className="mt-0.5 h-6 w-6 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                          <ClipboardList className="h-3.5 w-3.5 text-blue-400" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium">Menunggu Persetujuan</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {notifs.pendingSignoff} sesi perlu ditanda tangani
+                          </p>
+                        </div>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {notifs.openDiscrepancies > 0 && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/discrepancies" className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer">
+                        <div className="mt-0.5 h-6 w-6 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+                          <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium">Diskrepansi Terbuka</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {notifs.openDiscrepancies} diskrepansi perlu ditindaklanjuti
+                          </p>
+                        </div>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                </>
+              )}
+              <div className="px-3 py-1.5 border-t">
+                <p className="text-[10px] text-muted-foreground text-center">Diperbarui otomatis setiap menit</p>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {/* User menu */}
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10 transition-colors">
@@ -162,6 +252,39 @@ export function Navbar({ userName, userRole }: NavbarProps) {
               </Link>
             )
           })}
+
+          {/* Mobile notifications */}
+          {notifs.total > 0 && (
+            <>
+              <div className="h-px bg-white/[0.08] my-2" />
+              <div className="px-3 py-1">
+                <p className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">
+                  Notifikasi
+                </p>
+                {notifs.pendingSignoff > 0 && (
+                  <Link
+                    href="/signoff"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded text-[12px] text-blue-300 hover:bg-white/5"
+                  >
+                    <ClipboardList className="h-3.5 w-3.5 shrink-0" />
+                    {notifs.pendingSignoff} sesi perlu persetujuan
+                  </Link>
+                )}
+                {notifs.openDiscrepancies > 0 && (
+                  <Link
+                    href="/discrepancies"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded text-[12px] text-red-300 hover:bg-white/5"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {notifs.openDiscrepancies} diskrepansi terbuka
+                  </Link>
+                )}
+              </div>
+            </>
+          )}
+
           {outlets.length > 0 && (
             <>
               <div className="h-px bg-white/[0.08] my-2" />
