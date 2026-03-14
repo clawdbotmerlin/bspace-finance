@@ -525,7 +525,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     const dateStr = new Date(session.sessionDate).toISOString().slice(0, 10)
     const filename = `rekonsiliasi-${outletCode}-${dateStr}-${session.blockType}.pdf`
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
