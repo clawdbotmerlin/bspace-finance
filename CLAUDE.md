@@ -44,7 +44,7 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-21 / FIN-11 | History & session list | ✅ Done |
 | FRO-22 / FIN-12 | Dashboard metrics | ✅ Done |
 | FRO-23 / FIN-13 | PDF report generation | ✅ Done |
-| FRO-24 / FIN-14 | Audit log UI | ⏳ Pending |
+| FRO-24 / FIN-14 | Audit log UI | ✅ Done |
 | FRO-25 / FIN-15 | Discrepancy management | ⏳ Pending |
 | FRO-26 / FIN-16 | Notifications | ⏳ Pending |
 | FRO-27       | Self-healing parser (LLM re-config) | ⏳ Pending |
@@ -81,6 +81,7 @@ app/
     sessions/[id]/submit/       ← POST transition to pending_signoff
     sessions/[id]/signoff/      ← POST approve/reject (manager)
     sessions/[id]/report/       ← GET generate PDF report (signed_off only)
+    audit-logs/                 ← GET paginated audit log (admin only, filter by action/entityType/date)
 
 components/
   layout/Navbar.tsx       ← dark topbar, role-filtered nav, outlet selector
@@ -130,10 +131,12 @@ prisma/
 - Outlet selector in navbar → stored in `OutletProvider` context + sessionStorage
 - All text in Indonesian (Bahasa Indonesia)
 
-## Notes for Next Ticket (FIN-14: Audit Log UI)
-- Full audit log table at /admin/audit-log (admin-only, already in nav)
-- GET /api/audit-logs endpoint — paginated, filter by action/entityType/date
-- Shows: timestamp, user, action, entity type+id, payloadSummary
-- Actions logged so far: submit_for_signoff, signoff_approved, signoff_rejected
-- Consider infinite scroll or simple pagination
+## Notes for Next Ticket (FIN-15: Discrepancy Management)
+- Dedicated page at /admin/discrepancies or enhance the session review page
+- Allow finance staff to bulk-update discrepancy statuses across sessions
+- Filter by status (open/investigating/resolved), type, outlet, date range
+- Show which session each discrepancy belongs to with a link
+- PUT /api/sessions/[id]/discrepancies/[did] already exists for updates
+- Consider summary stats: open count, investigating count, resolved count
+- Role access: admin + finance
 
