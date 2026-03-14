@@ -15,22 +15,42 @@ export const GET = withAuth(async () => {
 }, ['admin', 'finance', 'manager'])
 
 export const POST = withAuth(async (req: NextRequest) => {
-  const { outletId, sessionDate, blockType } = await req.json()
-  if (!outletId || !sessionDate || !blockType) {
-    return NextResponse.json({ error: 'outletId, sessionDate, dan blockType wajib diisi.' }, { status: 400 })
+  const { outletId, sessionDate } = await req.json()
+  if (!outletId || !sessionDate) {
+    return NextResponse.json({ error: 'outletId dan sessionDate wajib diisi.' }, { status: 400 })
   }
 
   const date = new Date(sessionDate)
-  const existing = await prisma.reconciliationSession.findUnique({
-    where: { outletId_sessionDate_blockType: { outletId, sessionDate: date, blockType } },
-  })
-  if (existing) {
-    return NextResponse.json({ error: 'Sesi untuk outlet, tanggal, dan blok ini sudah ada.', existingId: existing.id }, { status: 409 })
+
+  // Check whether sessions already exist for this outlet + date
+  const [existingReg, existingEv] = await Promise.all([
+    prisma.reconciliationSession.findUnique({
+      where: { outletId_sessionDate_blockType: { outletId, sessionDate: date, blockType: 'REG' } },
+    }),
+    prisma.reconciliationSession.findUnique({
+      where: { outletId_sessionDate_blockType: { outletId, sessionDate: date, blockType: 'EV' } },
+    }),
+  ])
+
+  if (existingReg || existingEv) {
+    return NextResponse.json({
+      error: 'Sesi untuk outlet dan tanggal ini sudah ada.',
+      existingRegId: existingReg?.id ?? null,
+      existingEvId:  existingEv?.id  ?? null,
+    }, { status: 409 })
   }
 
-  const session = await prisma.reconciliationSession.create({
-    data: { outletId, sessionDate: date, blockType, status: 'uploading' },
-    include: { outlet: { select: { name: true, code: true } } },
-  })
-  return NextResponse.json(session, { status: 201 })
+  // Create REG and EV sessions simultaneously
+  const [regSession, evSession] = await Promise.all([
+    prisma.reconciliationSession.create({
+      data: { outletId, sessionDate: date, blockType: 'REG', status: 'uploading' },
+      include: { outlet: { select: { name: true, code: true } } },
+    }),
+    prisma.reconciliationSession.create({
+      data: { outletId, sessionDate: date, blockType: 'EV', status: 'uploading' },
+      include: { outlet: { select: { name: true, code: true } } },
+    }),
+  ])
+
+  return NextResponse.json({ reg: regSession, ev: evSession }, { status: 201 })
 }, ['admin', 'finance'])

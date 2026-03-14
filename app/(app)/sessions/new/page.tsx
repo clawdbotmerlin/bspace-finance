@@ -21,10 +21,27 @@ interface Session {
   outlet: { name: string; code: string }
 }
 
-interface UploadResult {
-  parsed: number
+interface SessionPair { reg: Session; ev: Session }
+
+interface CashierResult {
+  reg: { parsed: number }
+  ev: { parsed: number }
   skipped: number
   errors: string[]
+}
+
+interface MatchStats {
+  matched: number
+  zeros: number
+  missingInBank: number
+  unexpectedBank: number
+  amountMismatches: number
+  discrepancies: number
+}
+
+interface MatchResult {
+  reg: MatchStats
+  ev: MatchStats | null   // null when EV had no cashier entries
 }
 
 interface UploadedBank {
@@ -38,15 +55,14 @@ export default function NewSessionPage() {
   const [bankConfigs, setBankConfigs] = useState<BankConfig[]>([])
   const [outletId, setOutletId] = useState('')
   const [sessionDate, setSessionDate] = useState('')
-  const [blockType, setBlockType] = useState('REG')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
-  const [session, setSession] = useState<Session | null>(null)
+  const [sessions, setSessions] = useState<SessionPair | null>(null)
 
   // Step 2 – cashier upload
   const [cashierFile, setCashierFile] = useState<File | null>(null)
   const [cashierUploading, setCashierUploading] = useState(false)
-  const [cashierResult, setCashierResult] = useState<UploadResult | null>(null)
+  const [cashierResult, setCashierResult] = useState<CashierResult | null>(null)
   const [cashierError, setCashierError] = useState('')
 
   // Step 3 – bank mutation uploads
@@ -59,10 +75,7 @@ export default function NewSessionPage() {
   // Step 3 – matching
   const [matching, setMatching] = useState(false)
   const [matchError, setMatchError] = useState('')
-  const [matchResult, setMatchResult] = useState<{
-    matched: number; zeros: number; missingInBank: number
-    unexpectedBank: number; amountMismatches: number; discrepancies: number
-  } | null>(null)
+  const [matchResult, setMatchResult] = useState<MatchResult | null>(null)
 
   useEffect(() => {
     fetch('/api/outlets').then((r) => r.json()).then(setOutlets)
@@ -76,33 +89,44 @@ export default function NewSessionPage() {
     const res = await fetch('/api/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ outletId, sessionDate, blockType }),
+      body: JSON.stringify({ outletId, sessionDate }),
     })
     setCreating(false)
-    if (res.ok) { setSession(await res.json()); setStep(2) }
-    else { const d = await res.json(); setCreateError(d.error ?? 'Gagal membuat sesi.') }
+    if (res.ok) {
+      const data = await res.json()
+      setSessions({ reg: data.reg, ev: data.ev })
+      setStep(2)
+    } else {
+      const d = await res.json()
+      setCreateError(d.error ?? 'Gagal membuat sesi.')
+    }
   }
 
   async function handleCashierUpload(e: React.FormEvent) {
     e.preventDefault()
-    if (!cashierFile || !session) return
+    if (!cashierFile || !sessions) return
     setCashierError(''); setCashierResult(null); setCashierUploading(true)
     const fd = new FormData(); fd.append('file', cashierFile)
-    const res = await fetch(`/api/sessions/${session.id}/upload/cashier`, { method: 'POST', body: fd })
+    // Upload to the REG session — the API internally populates both REG and EV
+    const res = await fetch(`/api/sessions/${sessions.reg.id}/upload/cashier`, { method: 'POST', body: fd })
     setCashierUploading(false)
-    if (res.ok) { setCashierResult(await res.json()) }
-    else { const d = await res.json(); setCashierError(d.error ?? 'Gagal mengupload file.') }
+    if (res.ok) {
+      setCashierResult(await res.json())
+    } else {
+      const d = await res.json(); setCashierError(d.error ?? 'Gagal mengupload file.')
+    }
   }
 
   async function handleBankUpload(e: React.FormEvent) {
     e.preventDefault()
-    if (!bankFile || !session || !bankName) return
+    if (!bankFile || !sessions || !bankName) return
     setBankError(''); setBankUploading(true)
     const fd = new FormData(); fd.append('file', bankFile); fd.append('bankName', bankName)
-    const res = await fetch(`/api/sessions/${session.id}/upload/bankmutation`, { method: 'POST', body: fd })
+    // Upload to REG session — server mirrors to EV session if EV has cashier data
+    const res = await fetch(`/api/sessions/${sessions.reg.id}/upload/bankmutation`, { method: 'POST', body: fd })
     setBankUploading(false)
     if (res.ok) {
-      const data: UploadResult = await res.json()
+      const data = await res.json()
       setUploadedBanks((prev) => {
         const existing = prev.find((b) => b.bankName === bankName)
         if (existing) return prev.map((b) => b.bankName === bankName ? { ...b, count: data.parsed } : b)
@@ -115,35 +139,51 @@ export default function NewSessionPage() {
   }
 
   async function handleRunMatching() {
-    if (!session) return
+    if (!sessions) return
     setMatchError('')
     setMatching(true)
-    const res = await fetch(`/api/sessions/${session.id}/run-matching`, { method: 'POST' })
+
+    const evHasEntries = cashierResult && cashierResult.ev.parsed > 0
+
+    const [regRes, evRes] = await Promise.all([
+      fetch(`/api/sessions/${sessions.reg.id}/run-matching`, { method: 'POST' }),
+      evHasEntries
+        ? fetch(`/api/sessions/${sessions.ev.id}/run-matching`, { method: 'POST' })
+        : Promise.resolve(null),
+    ])
+
     setMatching(false)
-    if (res.ok) { setMatchResult(await res.json()) }
-    else { const d = await res.json(); setMatchError(d.error ?? 'Gagal menjalankan rekonsiliasi.') }
+
+    if (!regRes.ok) {
+      const d = await regRes.json()
+      setMatchError(d.error ?? 'Gagal menjalankan rekonsiliasi.')
+      return
+    }
+
+    const regData: MatchStats = await regRes.json()
+    const evData: MatchStats | null = evRes && evRes.ok ? await evRes.json() : null
+    setMatchResult({ reg: regData, ev: evData })
   }
 
   function reset() {
-    setStep(1); setSession(null)
+    setStep(1); setSessions(null)
     setCashierFile(null); setCashierResult(null); setCashierError('')
     setBankFile(null); setBankName(''); setBankError(''); setUploadedBanks([])
-    setCreateError(''); setOutletId(''); setSessionDate(''); setBlockType('REG')
+    setCreateError(''); setOutletId(''); setSessionDate('')
     setMatchResult(null); setMatchError('')
   }
 
-  const sessionBadges = session && (
+  const sessionBadges = sessions && (
     <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
       <div className="flex items-center gap-2 flex-wrap">
-        <Badge variant="outline" className="font-medium">{session.outlet.name}</Badge>
+        <Badge variant="outline" className="font-medium">{sessions.reg.outlet.name}</Badge>
         <Badge variant="outline">
-          {new Date(session.sessionDate).toLocaleDateString('id-ID', {
+          {new Date(sessions.reg.sessionDate).toLocaleDateString('id-ID', {
             day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
           })}
         </Badge>
-        <Badge className={cn(session.blockType === 'REG' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700', 'border-0')}>
-          {session.blockType}
-        </Badge>
+        <Badge className="bg-blue-100 text-blue-700 border-0">REG</Badge>
+        <Badge className="bg-purple-100 text-purple-700 border-0">EV</Badge>
       </div>
     </div>
   )
@@ -186,16 +226,10 @@ export default function NewSessionPage() {
               <Label>Tanggal</Label>
               <Input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} required />
             </div>
-            <div className="space-y-1.5">
-              <Label>Blok</Label>
-              <Select value={blockType} onValueChange={setBlockType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="REG">REG — Jam Reguler</SelectItem>
-                  <SelectItem value="EV">EV — Jam Event</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Blok selector removed — both REG and EV are created and detected automatically */}
+            <p className="text-xs text-slate-400 -mt-1">
+              Sesi REG dan EV akan dibuat otomatis berdasarkan isi file kasir.
+            </p>
             {createError && <ErrorMsg msg={createError} />}
             <Button type="submit" disabled={creating || !outletId || !sessionDate} className="w-full">
               {creating ? 'Membuat...' : 'Buat Sesi →'}
@@ -205,11 +239,14 @@ export default function NewSessionPage() {
       )}
 
       {/* ── Step 2: Cashier upload ─────────────────────────────────── */}
-      {step === 2 && session && (
+      {step === 2 && sessions && (
         <div className="space-y-4">
           {sessionBadges}
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <h2 className="font-medium text-slate-700 mb-4">Upload Laporan Kasir</h2>
+            <h2 className="font-medium text-slate-700 mb-1">Upload Laporan Kasir</h2>
+            <p className="text-xs text-slate-400 mb-4">
+              Upload satu file — blok REG dan EV akan dideteksi otomatis.
+            </p>
             <form onSubmit={handleCashierUpload} className="space-y-4">
               <FileDrop
                 file={cashierFile}
@@ -220,7 +257,7 @@ export default function NewSessionPage() {
               {cashierError && <ErrorMsg msg={cashierError} />}
               {cashierResult && (
                 <div className="space-y-2">
-                  <SuccessRow parsed={cashierResult.parsed} skipped={cashierResult.skipped} />
+                  <BlockResultRow reg={cashierResult.reg.parsed} ev={cashierResult.ev.parsed} skipped={cashierResult.skipped} />
                   <ErrorList errors={cashierResult.errors} />
                 </div>
               )}
@@ -244,7 +281,7 @@ export default function NewSessionPage() {
       )}
 
       {/* ── Step 3: Bank mutation uploads ─────────────────────────── */}
-      {step === 3 && session && (
+      {step === 3 && sessions && (
         <div className="space-y-4">
           {sessionBadges}
 
@@ -267,7 +304,10 @@ export default function NewSessionPage() {
 
           {/* Upload form */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <h2 className="font-medium text-slate-700 mb-4">Upload Mutasi Bank</h2>
+            <h2 className="font-medium text-slate-700 mb-1">Upload Mutasi Bank</h2>
+            <p className="text-xs text-slate-400 mb-4">
+              Upload sekali per bank — mutasi akan disalin otomatis ke sesi REG dan EV.
+            </p>
             <form onSubmit={handleBankUpload} className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Bank</Label>
@@ -309,37 +349,28 @@ export default function NewSessionPage() {
               </div>
               {matchError && <ErrorMsg msg={matchError} />}
               {matchResult ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <div className="flex items-center gap-1.5 text-green-700">
-                      <CheckCircle2 className="w-4 h-4 shrink-0" />
-                      <span><span className="font-semibold">{matchResult.matched}</span> entri cocok</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-slate-500">
-                      <CheckCircle2 className="w-4 h-4 shrink-0 opacity-40" />
-                      <span><span className="font-semibold">{matchResult.zeros}</span> nol / skip</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-red-600">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      <span><span className="font-semibold">{matchResult.missingInBank}</span> tidak ada di bank</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-red-600">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      <span><span className="font-semibold">{matchResult.unexpectedBank}</span> tak terduga</span>
-                    </div>
-                    {matchResult.amountMismatches > 0 && (
-                      <div className="flex items-center gap-1.5 text-amber-600 col-span-2">
-                        <AlertCircle className="w-4 h-4 shrink-0" />
-                        <span><span className="font-semibold">{matchResult.amountMismatches}</span> selisih jumlah</span>
-                      </div>
-                    )}
-                  </div>
-                  <Link href={`/sessions/${session.id}/review`}>
+                <div className="space-y-4">
+                  {/* REG block results */}
+                  <MatchBlock label="REG — Jam Reguler" color="blue" stats={matchResult.reg} />
+                  {/* EV block results (only when EV had data) */}
+                  {matchResult.ev && (
+                    <MatchBlock label="EV — Jam Event" color="purple" stats={matchResult.ev} />
+                  )}
+                  {/* Review links */}
+                  <Link href={`/sessions/${sessions.reg.id}/review`}>
                     <Button className="w-full gap-1.5">
                       <Eye className="w-4 h-4" />
-                      Lihat Hasil Review
+                      Lihat Review REG
                     </Button>
                   </Link>
+                  {matchResult.ev && (
+                    <Link href={`/sessions/${sessions.ev.id}/review`}>
+                      <Button variant="outline" className="w-full gap-1.5">
+                        <Eye className="w-4 h-4" />
+                        Lihat Review EV
+                      </Button>
+                    </Link>
+                  )}
                   <Button variant="outline" size="sm" className="w-full" onClick={reset}>
                     Mulai Sesi Baru
                   </Button>
@@ -394,13 +425,62 @@ function ErrorMsg({ msg }: { msg: string }) {
   )
 }
 
-function SuccessRow({ parsed, skipped }: { parsed: number; skipped: number }) {
+function BlockResultRow({ reg, ev, skipped }: { reg: number; ev: number; skipped: number }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg bg-green-50 border border-green-200 p-3">
-      <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
-      <div className="text-sm text-green-800">
-        <span className="font-semibold">{parsed} entri</span> berhasil diimpor
-        {skipped > 0 && <span className="text-green-600">, {skipped} baris dilewati</span>}
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-1">REG</p>
+          <p className="text-sm text-blue-800">
+            <span className="font-semibold">{reg}</span> entri diimpor
+          </p>
+        </div>
+        <div className="rounded-lg bg-purple-50 border border-purple-200 p-3">
+          <p className="text-[11px] font-semibold text-purple-600 uppercase tracking-wide mb-1">EV</p>
+          <p className="text-sm text-purple-800">
+            <span className="font-semibold">{ev}</span> entri diimpor
+          </p>
+        </div>
+      </div>
+      {skipped > 0 && (
+        <p className="text-xs text-slate-500 pl-1">{skipped} baris dilewati</p>
+      )}
+    </div>
+  )
+}
+
+function MatchBlock({ label, color, stats }: {
+  label: string
+  color: 'blue' | 'purple'
+  stats: MatchStats
+}) {
+  const accent = color === 'blue' ? 'text-blue-700' : 'text-purple-700'
+  return (
+    <div>
+      <p className={cn('text-[11px] font-semibold uppercase tracking-wide mb-2', accent)}>{label}</p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+        <div className="flex items-center gap-1.5 text-green-700">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span><span className="font-semibold">{stats.matched}</span> entri cocok</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-slate-500">
+          <CheckCircle2 className="w-4 h-4 shrink-0 opacity-40" />
+          <span><span className="font-semibold">{stats.zeros}</span> nol / skip</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-red-600">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span><span className="font-semibold">{stats.missingInBank}</span> tidak ada di bank</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-red-600">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span><span className="font-semibold">{stats.unexpectedBank}</span> tak terduga</span>
+        </div>
+        {stats.amountMismatches > 0 && (
+          <div className="flex items-center gap-1.5 text-amber-600 col-span-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span><span className="font-semibold">{stats.amountMismatches}</span> selisih jumlah</span>
+          </div>
+        )}
       </div>
     </div>
   )

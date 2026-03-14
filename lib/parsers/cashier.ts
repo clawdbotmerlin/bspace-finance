@@ -10,6 +10,7 @@ export interface ParsedCashierEntry {
   amount: number
   notaBill: string | null
   entityNameRaw: string | null
+  blockType: 'REG' | 'EV'   // auto-detected from (REG)/(EV) section header in file
 }
 
 export interface CashierParseResult {
@@ -36,7 +37,6 @@ function cellNum(value: ExcelJS.CellValue): number {
 export async function parseCashierFile(
   buffer: ArrayBuffer,
   sessionDate: Date,
-  blockType: 'REG' | 'EV',
 ): Promise<CashierParseResult> {
   const workbook = new ExcelJS.Workbook()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,7 +51,8 @@ export async function parseCashierFile(
   const entries: ParsedCashierEntry[] = []
   const errors: string[] = []
   let skipped = 0
-  let inSection = false
+  // Track whichever section we're currently inside (null = before first header)
+  let currentBlock: 'REG' | 'EV' | null = null
 
   sheet.eachRow((row, rowNum) => {
     const rowValues = row.values as ExcelJS.CellValue[]
@@ -59,21 +60,12 @@ export async function parseCashierFile(
     const cells = Array.from({ length: 20 }, (_, i) => rowValues[i + 1] ?? null)
     const rowText = cells.map(cellStr).join(' ').toUpperCase()
 
-    // Detect section title rows
-    const isREG = rowText.includes('(REG)')
-    const isEV = rowText.includes('(EV)')
+    // Detect section title rows — switch active block, do not parse this row
+    if (rowText.includes('(REG)')) { currentBlock = 'REG'; return }
+    if (rowText.includes('(EV)'))  { currentBlock = 'EV';  return }
 
-    if (isREG || isEV) {
-      // Start target section or stop when hitting other section
-      if ((blockType === 'REG' && isREG) || (blockType === 'EV' && isEV)) {
-        inSection = true
-      } else if (inSection) {
-        inSection = false
-      }
-      return
-    }
-
-    if (!inSection) return
+    // Skip rows that precede any section header
+    if (!currentBlock) return
 
     const paymentType = cellStr(cells[2]).toUpperCase()
     if (!VALID_PAYMENT_TYPES.has(paymentType)) {
@@ -81,7 +73,7 @@ export async function parseCashierFile(
       return
     }
 
-    // Parse bank+terminal from col 1 (NAMA BANK: e.g. "BCA C2AP2381")
+    // Parse bank+terminal from col 1 (e.g. "BCA C2AP2381")
     const bankRaw = cellStr(cells[1])
     const spaceIdx = bankRaw.indexOf(' ')
     const bankName = spaceIdx > 0 ? bankRaw.slice(0, spaceIdx).toUpperCase() : bankRaw.toUpperCase()
@@ -98,7 +90,7 @@ export async function parseCashierFile(
       return
     }
 
-    entries.push({ terminalCode, bankName, terminalId, paymentType, amount, notaBill, entityNameRaw })
+    entries.push({ terminalCode, bankName, terminalId, paymentType, amount, notaBill, entityNameRaw, blockType: currentBlock })
   })
 
   return { entries, skipped, errors, sheetFound: true }

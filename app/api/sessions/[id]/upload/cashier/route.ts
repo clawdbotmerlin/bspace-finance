@@ -16,34 +16,78 @@ export const POST = withAuth(async (req: NextRequest) => {
   if (!file) return NextResponse.json({ error: 'File tidak ditemukan dalam request.' }, { status: 400 })
 
   const buffer = await file.arrayBuffer()
-  const result = await parseCashierFile(buffer, session.sessionDate, session.blockType as 'REG' | 'EV')
+  // Parser now auto-detects both REG and EV sections; each entry carries its blockType
+  const result = await parseCashierFile(buffer, session.sessionDate)
 
   if (!result.sheetFound) {
     return NextResponse.json({ error: result.errors[0] }, { status: 422 })
   }
 
-  // Re-upload replaces existing entries
-  await prisma.cashierEntry.deleteMany({ where: { sessionId } })
+  // Find the paired session (same outlet + date, opposite blockType)
+  const pairedBlockType = session.blockType === 'REG' ? 'EV' : 'REG'
+  const pairedSession = await prisma.reconciliationSession.findUnique({
+    where: {
+      outletId_sessionDate_blockType: {
+        outletId:    session.outletId,
+        sessionDate: session.sessionDate,
+        blockType:   pairedBlockType,
+      },
+    },
+  })
 
-  if (result.entries.length > 0) {
+  // Split entries by their auto-detected block
+  const thisEntries   = result.entries.filter((e) => e.blockType === session.blockType)
+  const pairedEntries = pairedSession
+    ? result.entries.filter((e) => e.blockType === pairedBlockType)
+    : []
+
+  // Re-upload replaces all existing entries for both sessions
+  await prisma.cashierEntry.deleteMany({ where: { sessionId } })
+  if (pairedSession) {
+    await prisma.cashierEntry.deleteMany({ where: { sessionId: pairedSession.id } })
+  }
+
+  type PaymentType = 'QR' | 'DEBIT' | 'KK' | 'CASH' | 'VOUCHER'
+
+  if (thisEntries.length > 0) {
     await prisma.cashierEntry.createMany({
-      data: result.entries.map((e: typeof result.entries[number]) => ({
+      data: thisEntries.map((e) => ({
         sessionId,
-        terminalCode: e.terminalCode,
-        bankName: e.bankName,
-        terminalId: e.terminalId,
-        paymentType: e.paymentType as 'QR' | 'DEBIT' | 'KK' | 'CASH' | 'VOUCHER',
-        amount: e.amount,
-        notaBill: e.notaBill,
+        terminalCode:  e.terminalCode,
+        bankName:      e.bankName,
+        terminalId:    e.terminalId,
+        paymentType:   e.paymentType as PaymentType,
+        amount:        e.amount,
+        notaBill:      e.notaBill,
         entityNameRaw: e.entityNameRaw,
-        matchStatus: 'unmatched',
+        matchStatus:   'unmatched',
       })),
     })
   }
 
+  if (pairedEntries.length > 0 && pairedSession) {
+    await prisma.cashierEntry.createMany({
+      data: pairedEntries.map((e) => ({
+        sessionId:     pairedSession.id,
+        terminalCode:  e.terminalCode,
+        bankName:      e.bankName,
+        terminalId:    e.terminalId,
+        paymentType:   e.paymentType as PaymentType,
+        amount:        e.amount,
+        notaBill:      e.notaBill,
+        entityNameRaw: e.entityNameRaw,
+        matchStatus:   'unmatched',
+      })),
+    })
+  }
+
+  const regParsed = session.blockType === 'REG' ? thisEntries.length : pairedEntries.length
+  const evParsed  = session.blockType === 'EV'  ? thisEntries.length : pairedEntries.length
+
   return NextResponse.json({
-    parsed: result.entries.length,
+    reg: { parsed: regParsed },
+    ev:  { parsed: evParsed },
     skipped: result.skipped,
-    errors: result.errors,
+    errors:  result.errors,
   })
 }, ['admin', 'finance'])
