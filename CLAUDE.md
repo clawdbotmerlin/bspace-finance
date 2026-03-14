@@ -43,7 +43,7 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-20 / FIN-10 | Sign-off flow | ✅ Done |
 | FRO-21 / FIN-11 | History & session list | ✅ Done |
 | FRO-22 / FIN-12 | Dashboard metrics | ✅ Done |
-| FRO-23 / FIN-13 | PDF report generation | ⏳ Pending |
+| FRO-23 / FIN-13 | PDF report generation | ✅ Done |
 | FRO-24 / FIN-14 | Audit log UI | ⏳ Pending |
 | FRO-25 / FIN-15 | Discrepancy management | ⏳ Pending |
 | FRO-26 / FIN-16 | Notifications | ⏳ Pending |
@@ -80,6 +80,7 @@ app/
     sessions/[id]/discrepancies/[did]/     ← PUT update discrepancy status/notes
     sessions/[id]/submit/       ← POST transition to pending_signoff
     sessions/[id]/signoff/      ← POST approve/reject (manager)
+    sessions/[id]/report/       ← GET generate PDF report (signed_off only)
 
 components/
   layout/Navbar.tsx       ← dark topbar, role-filtered nav, outlet selector
@@ -129,11 +130,10 @@ prisma/
 - Outlet selector in navbar → stored in `OutletProvider` context + sessionStorage
 - All text in Indonesian (Bahasa Indonesia)
 
-## Notes for Next Ticket (FIN-13: PDF Report Generation)
-- API: GET /api/sessions/[id]/report → streams application/pdf
-- Use @react-pdf/renderer (server-side) for PDF generation
-- Report contents: session header (outlet, date, block type), summary stats table, matched pairs table, discrepancies table, sign-off block (signer name, timestamp, comment)
-- UI: add "Unduh Laporan" download button on /sessions/[id]/signoff page when status === signed_off
-- Only signed-off sessions can generate a report (guard in API)
-- formatRupiah() for all currency values in the PDF
+## Notes for Next Ticket (FIN-14: Audit Log UI)
+- Full audit log table at /admin/audit-log (admin-only, already in nav)
+- GET /api/audit-logs endpoint — paginated, filter by action/entityType/date
+- Shows: timestamp, user, action, entity type+id, payloadSummary
+- Actions logged so far: submit_for_signoff, signoff_approved, signoff_rejected
+- Consider infinite scroll or simple pagination
 

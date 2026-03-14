@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, CheckCircle2, MinusCircle, AlertCircle, AlertTriangle,
-  ClipboardCheck, Loader2, Search, ThumbsUp, ThumbsDown, XCircle,
+  ClipboardCheck, Loader2, Search, ThumbsUp, ThumbsDown, XCircle, Download,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -140,6 +140,9 @@ export default function SignoffPage() {
   const [actioning, setActioning] = useState(false)
   const [actionError, setActionError] = useState('')
 
+  // PDF download state
+  const [downloading, setDownloading] = useState(false)
+
   // Derived
   const missingDisc = discrepancies.filter((d: Discrepancy) => d.discrepancyType === 'missing_in_bank')
   const unexpectedDisc = discrepancies.filter((d: Discrepancy) => d.discrepancyType === 'unexpected_bank_entry')
@@ -195,6 +198,31 @@ export default function SignoffPage() {
       setComment('')
     } finally {
       setActioning(false)
+    }
+  }
+
+  async function handleDownloadReport() {
+    setDownloading(true)
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/report`)
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        alert(d.error ?? 'Gagal mengunduh laporan.')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const cd = res.headers.get('content-disposition') ?? ''
+      const match = cd.match(/filename="(.+)"/)
+      a.download = match ? match[1] : `laporan-rekonsiliasi.pdf`
+      a.href = url
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -426,12 +454,23 @@ export default function SignoffPage() {
               )}
             </div>
           </div>
-          <div className="mt-4">
+          <div className="mt-4 flex items-center gap-2 flex-wrap">
             <Link href="/signoff">
               <Button variant="outline" size="sm" className="gap-1.5">
                 <ArrowLeft className="w-3.5 h-3.5" /> Kembali ke Antrian
               </Button>
             </Link>
+            <Button
+              size="sm"
+              onClick={handleDownloadReport}
+              disabled={downloading}
+              className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {downloading
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Download className="w-3.5 h-3.5" />}
+              Unduh Laporan PDF
+            </Button>
           </div>
         </div>
       )}
