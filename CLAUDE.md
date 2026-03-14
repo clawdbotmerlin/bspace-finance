@@ -45,7 +45,7 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-22 / FIN-12 | Dashboard metrics | ✅ Done |
 | FRO-23 / FIN-13 | PDF report generation | ✅ Done |
 | FRO-24 / FIN-14 | Audit log UI | ✅ Done |
-| FRO-25 / FIN-15 | Discrepancy management | ⏳ Pending |
+| FRO-25 / FIN-15 | Discrepancy management | ✅ Done |
 | FRO-26 / FIN-16 | Notifications | ⏳ Pending |
 | FRO-27       | Self-healing parser (LLM re-config) | ⏳ Pending |
 
@@ -60,6 +60,7 @@ app/
     sessions/[id]/signoff/ ← FIN-10: sign-off detail (manager approve/reject)
     signoff/              ← FIN-10: sign-off queue (pending_signoff sessions)
     history/               ← FIN-11: full session list with filters & sorting
+    discrepancies/         ← FIN-15: cross-session discrepancy management (admin+finance)
     admin/
       users/      ← user management (admin only)
       master-data/
@@ -82,6 +83,7 @@ app/
     sessions/[id]/signoff/      ← POST approve/reject (manager)
     sessions/[id]/report/       ← GET generate PDF report (signed_off only)
     audit-logs/                 ← GET paginated audit log (admin only, filter by action/entityType/date)
+    discrepancies/              ← GET cross-session discrepancies + summary stats (admin+finance)
 
 components/
   layout/Navbar.tsx       ← dark topbar, role-filtered nav, outlet selector
@@ -131,12 +133,11 @@ prisma/
 - Outlet selector in navbar → stored in `OutletProvider` context + sessionStorage
 - All text in Indonesian (Bahasa Indonesia)
 
-## Notes for Next Ticket (FIN-15: Discrepancy Management)
-- Dedicated page at /admin/discrepancies or enhance the session review page
-- Allow finance staff to bulk-update discrepancy statuses across sessions
-- Filter by status (open/investigating/resolved), type, outlet, date range
-- Show which session each discrepancy belongs to with a link
-- PUT /api/sessions/[id]/discrepancies/[did] already exists for updates
-- Consider summary stats: open count, investigating count, resolved count
-- Role access: admin + finance
+## Notes for Next Ticket (FIN-16: Notifications)
+- In-app notification bell in Navbar for pending sign-offs and open discrepancies
+- GET /api/notifications or derive counts from existing session/discrepancy queries
+- Badge count on navbar bell icon showing total unread items
+- Dropdown list: each item links to relevant page (signoff queue / discrepancy page)
+- Consider per-user read state (mark as read) vs always-live counts
+- Role-aware: managers see sign-off notifications, finance sees discrepancy alerts
 

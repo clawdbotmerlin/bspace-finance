@@ -8,5 +8,7 @@ export const config = {
     '/admin/:path*',
     '/signoff',
     '/signoff/:path*',
+    '/discrepancies',
+    '/discrepancies/:path*',
   ],
 }
