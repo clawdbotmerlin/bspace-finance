@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/guards'
 import { prisma } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 
 const PAGE_SIZE = 25
 
@@ -15,18 +16,19 @@ export const GET = withAuth(async (req: NextRequest) => {
   const dateTo   = searchParams.get('dateTo')?.trim() || undefined
 
   // Build where clause
-  const where: Parameters<typeof prisma.auditLog.findMany>[0]['where'] = {}
+  const where: Prisma.AuditLogWhereInput = {}
   if (action) where.action = action
   if (entityType) where.entityType = entityType
   if (dateFrom || dateTo) {
-    where.createdAt = {}
-    if (dateFrom) where.createdAt.gte = new Date(dateFrom)
+    const createdAt: Prisma.DateTimeFilter = {}
+    if (dateFrom) createdAt.gte = new Date(dateFrom)
     if (dateTo) {
       // Include the full dateTo day
       const end = new Date(dateTo)
       end.setHours(23, 59, 59, 999)
-      where.createdAt.lte = end
+      createdAt.lte = end
     }
+    where.createdAt = createdAt
   }
 
   const [total, logs] = await Promise.all([
