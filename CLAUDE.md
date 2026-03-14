@@ -42,7 +42,7 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-19 / FIN-09 | Session review UI | ✅ Done |
 | FRO-20 / FIN-10 | Sign-off flow | ✅ Done |
 | FRO-21 / FIN-11 | History & session list | ✅ Done |
-| FRO-22 / FIN-12 | Dashboard metrics | ⏳ Pending |
+| FRO-22 / FIN-12 | Dashboard metrics | ✅ Done |
 | FRO-23 / FIN-13 | PDF report generation | ⏳ Pending |
 | FRO-24 / FIN-14 | Audit log UI | ⏳ Pending |
 | FRO-25 / FIN-15 | Discrepancy management | ⏳ Pending |
@@ -54,7 +54,7 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 app/
   (app)/          ← authenticated routes (protected by middleware)
     layout.tsx    ← OutletProvider + Navbar wrapper
-    dashboard/
+    dashboard/            ← FIN-12: metrics dashboard (stat cards + recent sessions)
     sessions/new/        ← 3-step upload wizard
     sessions/[id]/review/ ← FIN-09: review matched/unmatched/discrepancies
     sessions/[id]/signoff/ ← FIN-10: sign-off detail (manager approve/reject)
@@ -129,10 +129,11 @@ prisma/
 - Outlet selector in navbar → stored in `OutletProvider` context + sessionStorage
 - All text in Indonesian (Bahasa Indonesia)
 
-## Notes for Next Ticket (FIN-12: Dashboard Metrics)
-- Dashboard overview at `/dashboard` for all roles
-- Key metrics: total sessions, sessions by status, recent activity
-- Stats cards: Selesai (signed_off), Menunggu TTD, Review, Total Kasir & Bank entries
-- Charts optional for now — focus on stat cards + recent sessions table
-- Use same data from GET /api/sessions, compute metrics client-side
+## Notes for Next Ticket (FIN-13: PDF Report Generation)
+- API: GET /api/sessions/[id]/report → streams application/pdf
+- Use @react-pdf/renderer (server-side) for PDF generation
+- Report contents: session header (outlet, date, block type), summary stats table, matched pairs table, discrepancies table, sign-off block (signer name, timestamp, comment)
+- UI: add "Unduh Laporan" download button on /sessions/[id]/signoff page when status === signed_off
+- Only signed-off sessions can generate a report (guard in API)
+- formatRupiah() for all currency values in the PDF
 
