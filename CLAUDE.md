@@ -47,7 +47,7 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-24 / FIN-14 | Audit log UI | ✅ Done |
 | FRO-25 / FIN-15 | Discrepancy management | ✅ Done |
 | FRO-26 / FIN-16 | Notifications | ✅ Done |
-| FRO-27       | Self-healing parser (LLM re-config) | ⏳ Pending |
+| FRO-27       | Self-healing parser (LLM re-config) | ✅ Done |
 | FRO-28 / FIN-17 | Cashier parser v3 template support | ✅ Done |
 
 ## Key File Map
@@ -78,6 +78,7 @@ app/
     sessions/[id]/upload/ ← POST cashier + bank mutation files
     sessions/[id]/run-matching/ ← POST run reconciliation engine
     sessions/[id]/matches/      ← GET matched pairs + zero count
+    sessions/[id]/suggest-bank-config/ ← POST AI column-mapping suggestion (finance+admin)
     sessions/[id]/discrepancies/           ← GET all discrepancies
     sessions/[id]/discrepancies/[did]/     ← PUT update discrepancy status/notes
     sessions/[id]/submit/       ← POST transition to pending_signoff
@@ -147,10 +148,13 @@ prisma/
 - Col L (11): NOTA BILL → notaBill  ← **was col K (10) in old format**
 - Col M (12): CATATAN (notes, not stored)
 
-## Notes for Next Ticket (FRO-27: Self-healing parser / LLM re-config)
-- When cashier Excel upload fails to parse (no rows extracted), trigger LLM re-config flow
-- LLM analyzes the sheet headers and suggests new BankColumnConfig values
-- User reviews and accepts/rejects the suggested config before re-parsing
-- Consider using Claude API (claude-3-5-haiku) for column mapping suggestions
-- Store config per bankName; once accepted, persists for future uploads from same bank
+## FRO-27: Self-healing Parser Notes
+- Triggered when bank mutation upload returns 0 parsed mutations
+- `POST /api/sessions/[id]/suggest-bank-config` accepts the same file + bankName FormData
+- Reads first 40 rows with `xlsx`, sends to `claude-3-5-haiku-20241022` via raw fetch
+- Returns `{ configId, suggestion: { skipRowsTop, skipRowsBottom, columnMapping } }`
+- UI shows editable JSON textarea; user can modify before saving
+- `PUT /api/bank-configs/[id]` (now allows finance role) persists the accepted config
+- After save, "Coba Ulang Upload" re-runs the bank upload with the now-corrected config
+- Requires `ANTHROPIC_API_KEY` env var on the server
 

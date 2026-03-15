@@ -9,7 +9,7 @@ export const PUT = withAuth(async (req: NextRequest) => {
   const { id: _id, createdAt: _c, updatedAt: _u, ...data } = body
   const config = await prisma.bankColumnConfig.update({ where: { id }, data })
   return NextResponse.json(config)
-}, ['admin'])
+}, ['admin', 'finance'])
 
 export const DELETE = withAuth(async (req: NextRequest) => {
   const id = req.nextUrl.pathname.split('/').at(-1)!

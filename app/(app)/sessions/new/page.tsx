@@ -1,8 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { Upload, CheckCircle2, AlertCircle, ArrowLeft, FileSpreadsheet, Loader2, Eye } from 'lucide-react'
+import {
+  Upload, CheckCircle2, AlertCircle, ArrowLeft, FileSpreadsheet,
+  Loader2, Eye, Sparkles,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -49,6 +52,13 @@ interface UploadedBank {
   count: number
 }
 
+interface SuggestState {
+  status: 'idle' | 'analyzing' | 'ready' | 'saving' | 'saved'
+  configId: string | null
+  editedJson: string
+  error: string
+}
+
 export default function NewSessionPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [outlets, setOutlets] = useState<Outlet[]>([])
@@ -71,6 +81,9 @@ export default function NewSessionPage() {
   const [bankUploading, setBankUploading] = useState(false)
   const [bankError, setBankError] = useState('')
   const [uploadedBanks, setUploadedBanks] = useState<UploadedBank[]>([])
+
+  // Step 3 – LLM suggest config
+  const [bankSuggest, setBankSuggest] = useState<SuggestState | null>(null)
 
   // Step 3 – matching
   const [matching, setMatching] = useState(false)
@@ -117,8 +130,8 @@ export default function NewSessionPage() {
     }
   }
 
-  async function handleBankUpload(e: React.FormEvent) {
-    e.preventDefault()
+  // Core upload logic (used by both form submit and retry after config save)
+  const doUploadBank = useCallback(async () => {
     if (!bankFile || !sessions || !bankName) return
     setBankError(''); setBankUploading(true)
     const fd = new FormData(); fd.append('file', bankFile); fd.append('bankName', bankName)
@@ -132,9 +145,62 @@ export default function NewSessionPage() {
         if (existing) return prev.map((b) => b.bankName === bankName ? { ...b, count: data.parsed } : b)
         return [...prev, { bankName, count: data.parsed }]
       })
-      setBankFile(null); setBankName('')
+      if (data.parsed === 0) {
+        // Keep file + bankName in state so user can analyze and retry
+        setBankSuggest({ status: 'idle', configId: null, editedJson: '', error: '' })
+      } else {
+        setBankFile(null); setBankName('')
+        setBankSuggest(null)
+      }
     } else {
       const d = await res.json(); setBankError(d.error ?? 'Gagal mengupload file.')
+    }
+  }, [bankFile, sessions, bankName])
+
+  async function handleBankUpload(e: React.FormEvent) {
+    e.preventDefault()
+    await doUploadBank()
+  }
+
+  async function handleAnalyzeConfig() {
+    if (!bankFile || !sessions || !bankName) return
+    setBankSuggest((prev) => prev ? { ...prev, status: 'analyzing', error: '' } : null)
+    const fd = new FormData(); fd.append('file', bankFile); fd.append('bankName', bankName)
+    const res = await fetch(`/api/sessions/${sessions.reg.id}/suggest-bank-config`, { method: 'POST', body: fd })
+    if (res.ok) {
+      const data = await res.json()
+      setBankSuggest((prev) => prev ? {
+        ...prev,
+        status: 'ready',
+        configId: data.configId,
+        editedJson: JSON.stringify(data.suggestion, null, 2),
+      } : null)
+    } else {
+      const d = await res.json()
+      setBankSuggest((prev) => prev ? { ...prev, status: 'idle', error: d.error ?? 'Gagal menganalisis file.' } : null)
+    }
+  }
+
+  async function handleSaveConfig() {
+    if (!bankSuggest?.configId || !bankSuggest.editedJson) return
+    setBankSuggest((prev) => prev ? { ...prev, status: 'saving', error: '' } : null)
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(bankSuggest.editedJson)
+    } catch {
+      setBankSuggest((prev) => prev ? { ...prev, status: 'ready', error: 'JSON tidak valid. Periksa kembali.' } : null)
+      return
+    }
+    const res = await fetch(`/api/bank-configs/${bankSuggest.configId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(parsed),
+    })
+    if (res.ok) {
+      setBankSuggest((prev) => prev ? { ...prev, status: 'saved' } : null)
+    } else {
+      const d = await res.json()
+      setBankSuggest((prev) => prev ? { ...prev, status: 'ready', error: d.error ?? 'Gagal menyimpan konfigurasi.' } : null)
     }
   }
 
@@ -170,7 +236,7 @@ export default function NewSessionPage() {
     setCashierFile(null); setCashierResult(null); setCashierError('')
     setBankFile(null); setBankName(''); setBankError(''); setUploadedBanks([])
     setCreateError(''); setOutletId(''); setSessionDate('')
-    setMatchResult(null); setMatchError('')
+    setMatchResult(null); setMatchError(''); setBankSuggest(null)
   }
 
   const sessionBadges = sessions && (
@@ -292,10 +358,14 @@ export default function NewSessionPage() {
               <div className="space-y-1.5">
                 {uploadedBanks.map((b) => (
                   <div key={b.bankName} className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                    {b.count > 0
+                      ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                      : <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />}
                     <span className="font-mono font-medium text-slate-700">{b.bankName}</span>
                     <span className="text-slate-400">—</span>
-                    <span className="text-slate-600">{b.count} mutasi</span>
+                    <span className={b.count === 0 ? 'text-amber-600' : 'text-slate-600'}>
+                      {b.count} mutasi
+                    </span>
                   </div>
                 ))}
               </div>
@@ -311,7 +381,7 @@ export default function NewSessionPage() {
             <form onSubmit={handleBankUpload} className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Bank</Label>
-                <Select value={bankName} onValueChange={setBankName}>
+                <Select value={bankName} onValueChange={(v) => { setBankName(v); setBankSuggest(null) }}>
                   <SelectTrigger><SelectValue placeholder="Pilih bank..." /></SelectTrigger>
                   <SelectContent>
                     {bankConfigs.map((b) => (
@@ -324,7 +394,7 @@ export default function NewSessionPage() {
                 file={bankFile}
                 accept=".xlsx,.xls,.csv"
                 label="File Mutasi (.xlsx / .xls / .csv)"
-                onChange={(f) => { setBankFile(f); setBankError('') }}
+                onChange={(f) => { setBankFile(f); setBankError(''); setBankSuggest(null) }}
               />
               {bankError && <ErrorMsg msg={bankError} />}
               <div className="flex gap-2">
@@ -338,6 +408,86 @@ export default function NewSessionPage() {
               </div>
             </form>
           </div>
+
+          {/* ── AI Suggest Config Card (appears when 0 mutations parsed) ── */}
+          {bankSuggest && bankFile && bankName && (
+            <div className="bg-white rounded-xl border border-amber-200 p-5 shadow-sm space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-slate-700">
+                    0 mutasi terdeteksi untuk {bankName}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Format file mungkin berbeda dari konfigurasi. AI dapat menganalisis dan menyarankan konfigurasi kolom yang baru.
+                  </p>
+                </div>
+              </div>
+
+              {bankSuggest.status === 'idle' && (
+                <Button
+                  onClick={handleAnalyzeConfig}
+                  variant="outline"
+                  className="gap-2 border-amber-300 hover:bg-amber-50"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  Analisis Format dengan AI
+                </Button>
+              )}
+
+              {bankSuggest.status === 'analyzing' && (
+                <div className="flex items-center gap-2 text-sm text-slate-500 py-1">
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                  Menganalisis format file dengan AI...
+                </div>
+              )}
+
+              {(bankSuggest.status === 'ready' || bankSuggest.status === 'saving' || bankSuggest.status === 'saved') && (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-slate-500">
+                      Konfigurasi yang Disarankan AI — edit jika perlu
+                    </Label>
+                    <textarea
+                      className="w-full font-mono text-xs border border-slate-200 rounded-lg p-3 bg-slate-50 resize-y min-h-[180px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={bankSuggest.editedJson}
+                      onChange={(e) => setBankSuggest((prev) => prev ? { ...prev, editedJson: e.target.value } : null)}
+                      disabled={bankSuggest.status !== 'ready'}
+                      spellCheck={false}
+                    />
+                  </div>
+
+                  {bankSuggest.status === 'saved' ? (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                      <span className="text-sm text-green-700 flex-1">Konfigurasi berhasil disimpan.</span>
+                      <Button
+                        size="sm"
+                        onClick={doUploadBank}
+                        disabled={bankUploading}
+                        className="gap-1.5"
+                      >
+                        <Upload className="w-3 h-3" />
+                        {bankUploading ? 'Mengupload...' : 'Coba Ulang Upload'}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={handleSaveConfig}
+                      disabled={bankSuggest.status === 'saving'}
+                      className="w-full gap-1.5"
+                    >
+                      {bankSuggest.status === 'saving'
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan...</>
+                        : 'Simpan Konfigurasi'}
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {bankSuggest.error && <ErrorMsg msg={bankSuggest.error} />}
+            </div>
+          )}
 
           {uploadedBanks.length > 0 && (
             <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-3">
