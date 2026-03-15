@@ -159,5 +159,5 @@ prisma/
 - UI shows editable JSON textarea; user can modify before saving
 - `PUT /api/bank-configs/[id]` (now allows finance role) persists the accepted config
 - After save, "Coba Ulang Upload" re-runs the bank upload with the now-corrected config
-- Requires `ANTHROPIC_API_KEY` env var on the server
+- Requires `ANTHROPIC_API_KEY` env var on the server (add to `/opt/bspace-finance/app/.env` then `pm2 restart bspace-finance`)
 
