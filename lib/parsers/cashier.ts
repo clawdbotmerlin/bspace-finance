@@ -10,7 +10,7 @@ export interface ParsedCashierEntry {
   amount: number
   notaBill: string | null
   entityNameRaw: string | null
-  blockType: 'REG' | 'EV'   // auto-detected from (REG)/(EV) section header in file
+  blockType: 'REG' | 'EV'   // auto-detected from "BLOK REG"/"BLOK EV" title row (v3 template)
 }
 
 export interface CashierParseResult {
@@ -60,29 +60,32 @@ export async function parseCashierFile(
     const cells = Array.from({ length: 20 }, (_, i) => rowValues[i + 1] ?? null)
     const rowText = cells.map(cellStr).join(' ').toUpperCase()
 
-    // Detect section title rows — switch active block, do not parse this row
-    if (rowText.includes('(REG)')) { currentBlock = 'REG'; return }
-    if (rowText.includes('(EV)'))  { currentBlock = 'EV';  return }
+    // Detect section title rows (v3 format: "BLOK REG" / "BLOK EV" in col A title row)
+    // switch active block and skip the title/header rows themselves
+    if (rowText.includes('BLOK REG')) { currentBlock = 'REG'; return }
+    if (rowText.includes('BLOK EV'))  { currentBlock = 'EV';  return }
 
     // Skip rows that precede any section header
     if (!currentBlock) return
 
+    // Col C (index 2) = JENIS — payment type filter also skips header/summary rows naturally
     const paymentType = cellStr(cells[2]).toUpperCase()
     if (!VALID_PAYMENT_TYPES.has(paymentType)) {
       skipped++
       return
     }
 
-    // Parse bank+terminal from col 1 (e.g. "BCA C2AP2381")
+    // Col A (0): KODE EDC   Col B (1): NAMA BANK / TERMINAL  Col C (2): JENIS
+    // Col D (3): ENTITAS    Col K (10): TOTAL (=SUM of POS cols) Col L (11): NOTA BILL
     const bankRaw = cellStr(cells[1])
     const spaceIdx = bankRaw.indexOf(' ')
     const bankName = spaceIdx > 0 ? bankRaw.slice(0, spaceIdx).toUpperCase() : bankRaw.toUpperCase()
     const terminalId = spaceIdx > 0 ? bankRaw.slice(spaceIdx + 1).trim() || null : null
 
-    const terminalCode = cellStr(cells[0]) || null
-    const amount = cellNum(cells[8])
-    const entityNameRaw = cellStr(cells[9]) || null
-    const notaBill = cellStr(cells[10]) || null
+    const terminalCode  = cellStr(cells[0])  || null
+    const amount        = cellNum(cells[10])           // col K — TOTAL (sum of all POS columns)
+    const entityNameRaw = cellStr(cells[3])  || null   // col D — ENTITAS
+    const notaBill      = cellStr(cells[11]) || null   // col L — NOTA BILL
 
     if (!bankName && !terminalCode) {
       errors.push(`Baris ${rowNum}: NAMA BANK dan kode terminal kosong, dilewati.`)

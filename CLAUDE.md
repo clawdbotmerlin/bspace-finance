@@ -48,6 +48,7 @@ ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
 | FRO-25 / FIN-15 | Discrepancy management | ✅ Done |
 | FRO-26 / FIN-16 | Notifications | ✅ Done |
 | FRO-27       | Self-healing parser (LLM re-config) | ⏳ Pending |
+| FRO-28 / FIN-17 | Cashier parser v3 template support | ✅ Done |
 
 ## Key File Map
 ```
@@ -133,6 +134,18 @@ prisma/
 - Role-only nav items: Data Master, Log Audit, Pengguna → admin only
 - Outlet selector in navbar → stored in `OutletProvider` context + sessionStorage
 - All text in Indonesian (Bahasa Indonesia)
+
+## Cashier Template v3 Column Layout (TEMPLATE_KASIR_FINSETTLE_v3_final.xlsx)
+- Sheet names: `"01"`, `"02"` … `"31"` (day of month, zero-padded) — same as before
+- Block detection: title row contains `"BLOK REG"` or `"BLOK EV"` in col A
+- Col A (0): KODE EDC → terminalCode
+- Col B (1): NAMA BANK / TERMINAL → bankName + terminalId (split on first space)
+- Col C (2): JENIS → paymentType (QR / DEBIT / KK / CASH / VOUCHER)
+- Col D (3): ENTITAS → entityNameRaw  ← **was col J (9) in old format**
+- Col E–J (4–9): per-POS amounts (not used directly)
+- Col K (10): TOTAL = SUM(E:J) → amount  ← **was col I (8) in old format**
+- Col L (11): NOTA BILL → notaBill  ← **was col K (10) in old format**
+- Col M (12): CATATAN (notes, not stored)
 
 ## Notes for Next Ticket (FRO-27: Self-healing parser / LLM re-config)
 - When cashier Excel upload fails to parse (no rows extracted), trigger LLM re-config flow
