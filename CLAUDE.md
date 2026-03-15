@@ -16,12 +16,15 @@ Stack: Next.js 14 (App Router) · TypeScript · Tailwind CSS · Prisma ORM · Po
 - DB: `postgresql://bspace_finance:bspace_finance@localhost:5432/bspace_finance`
 
 ## Deploy Workflow
+Server uses NVM; must activate Node 18 before installing/building (Node 14 default breaks Prisma preinstall).
 ```bash
-git push origin main && \
-ssh -i ~/.ssh/merlin_aasha root@68.183.229.3 \
-  "cd /opt/bspace-finance/app && git pull origin main && \
-   npm install --legacy-peer-deps && npm run build && pm2 restart bspace-finance"
+git push origin main
+# Then SSH and run:
+export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh" && nvm use 18 && \
+cd /opt/bspace-finance/app && git pull origin main && \
+npm install --legacy-peer-deps && npm run build && pm2 restart bspace-finance
 ```
+Use `expect` with password `makeithappen` for automated deploy (see previous sessions).
 
 ## Linear Project
 - Team: Frontier (FRO), Project: BSpace Finance
