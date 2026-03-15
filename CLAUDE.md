@@ -154,10 +154,10 @@ prisma/
 ## FRO-27: Self-healing Parser Notes
 - Triggered when bank mutation upload returns 0 parsed mutations
 - `POST /api/sessions/[id]/suggest-bank-config` accepts the same file + bankName FormData
-- Reads first 40 rows with `xlsx`, sends to `claude-3-5-haiku-20241022` via raw fetch
+- Reads first 40 rows with `xlsx`, sends to Moonshot Kimi K2 (`kimi-k2`) via OpenAI-compatible API
 - Returns `{ configId, suggestion: { skipRowsTop, skipRowsBottom, columnMapping } }`
 - UI shows editable JSON textarea; user can modify before saving
 - `PUT /api/bank-configs/[id]` (now allows finance role) persists the accepted config
 - After save, "Coba Ulang Upload" re-runs the bank upload with the now-corrected config
-- Requires `ANTHROPIC_API_KEY` env var on the server (add to `/opt/bspace-finance/app/.env` then `pm2 restart bspace-finance`)
+- Requires `MOONSHOT_API_KEY` env var on the server (add to `/opt/bspace-finance/app/.env` then `pm2 restart bspace-finance`)
 

@@ -3,9 +3,8 @@ import { withAuth } from '@/lib/guards'
 import { prisma } from '@/lib/db'
 import * as XLSX from 'xlsx'
 
-interface AnthropicTextBlock { type: 'text'; text: string }
-interface AnthropicResponse {
-  content: Array<AnthropicTextBlock | { type: string }>
+interface MoonshotResponse {
+  choices: Array<{ message: { content: string } }>
 }
 
 export const POST = withAuth(async (req: NextRequest) => {
@@ -43,9 +42,9 @@ export const POST = withAuth(async (req: NextRequest) => {
     columnMapping: existingConfig.columnMapping,
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.MOONSHOT_API_KEY
   if (!apiKey) {
-    return NextResponse.json({ error: 'ANTHROPIC_API_KEY tidak dikonfigurasi di server.' }, { status: 500 })
+    return NextResponse.json({ error: 'MOONSHOT_API_KEY tidak dikonfigurasi di server.' }, { status: 500 })
   }
 
   const prompt = `You are analyzing a bank statement Excel/CSV file to determine the correct column mapping configuration for a finance reconciliation system.
@@ -88,15 +87,14 @@ Respond with ONLY a JSON object, no explanation, no markdown fences:
   "columnMapping": { ... }
 }`
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch('https://api.moonshot.cn/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-3-5-haiku-20241022',
+      model: 'kimi-k2',
       max_tokens: 1024,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -104,13 +102,12 @@ Respond with ONLY a JSON object, no explanation, no markdown fences:
 
   if (!res.ok) {
     const err = await res.text()
-    console.error('Anthropic API error:', err)
+    console.error('Moonshot API error:', err)
     return NextResponse.json({ error: 'Gagal menghubungi layanan AI.' }, { status: 502 })
   }
 
-  const aiData = await res.json() as AnthropicResponse
-  const textBlock = aiData.content.find((b) => b.type === 'text') as AnthropicTextBlock | undefined
-  const rawText = textBlock?.text ?? ''
+  const aiData = await res.json() as MoonshotResponse
+  const rawText = aiData.choices?.[0]?.message?.content ?? ''
 
   // Strip any accidental markdown fences and extract JSON
   const jsonMatch = rawText.match(/\{[\s\S]*\}/)
