@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   Upload, CheckCircle2, AlertCircle, ArrowLeft, FileSpreadsheet,
-  Loader2, Eye, Sparkles,
+  Loader2, Eye, Sparkles, Plus, X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,6 +59,15 @@ interface SuggestState {
   error: string
 }
 
+interface BankUploadRow {
+  id: string
+  bankName: string
+  file: File | null
+  uploading: boolean
+  error: string
+  suggest: SuggestState | null
+}
+
 export default function NewSessionPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [outlets, setOutlets] = useState<Outlet[]>([])
@@ -75,15 +84,13 @@ export default function NewSessionPage() {
   const [cashierResult, setCashierResult] = useState<CashierResult | null>(null)
   const [cashierError, setCashierError] = useState('')
 
-  // Step 3 – bank mutation uploads
-  const [bankName, setBankName] = useState('')
-  const [bankFile, setBankFile] = useState<File | null>(null)
-  const [bankUploading, setBankUploading] = useState(false)
-  const [bankError, setBankError] = useState('')
+  // Step 3 – bank mutation uploads (multi-row)
+  const emptyRow = (): BankUploadRow => ({
+    id: String(Date.now() + Math.random()),
+    bankName: '', file: null, uploading: false, error: '', suggest: null,
+  })
+  const [bankRows, setBankRows] = useState<BankUploadRow[]>([emptyRow()])
   const [uploadedBanks, setUploadedBanks] = useState<UploadedBank[]>([])
-
-  // Step 3 – LLM suggest config
-  const [bankSuggest, setBankSuggest] = useState<SuggestState | null>(null)
 
   // Step 3 – matching
   const [matching, setMatching] = useState(false)
@@ -130,77 +137,75 @@ export default function NewSessionPage() {
     }
   }
 
-  // Core upload logic (used by both form submit and retry after config save)
-  const doUploadBank = useCallback(async () => {
-    if (!bankFile || !sessions || !bankName) return
-    setBankError(''); setBankUploading(true)
-    const fd = new FormData(); fd.append('file', bankFile); fd.append('bankName', bankName)
-    // Upload to REG session — server mirrors to EV session if EV has cashier data
+  function updateRow(id: string, patch: Partial<BankUploadRow>) {
+    setBankRows((prev) => prev.map((r) => r.id === id ? { ...r, ...patch } : r))
+  }
+
+  function patchSuggest(id: string, patch: Partial<SuggestState>) {
+    setBankRows((prev) => prev.map((r) =>
+      r.id === id && r.suggest ? { ...r, suggest: { ...r.suggest, ...patch } } : r
+    ))
+  }
+
+  async function doUploadBankRow(id: string) {
+    const row = bankRows.find((r) => r.id === id)
+    if (!row || !row.file || !row.bankName || !sessions) return
+    updateRow(id, { uploading: true, error: '' })
+    const fd = new FormData(); fd.append('file', row.file); fd.append('bankName', row.bankName)
     const res = await fetch(`/api/sessions/${sessions.reg.id}/upload/bankmutation`, { method: 'POST', body: fd })
-    setBankUploading(false)
+    updateRow(id, { uploading: false })
     if (res.ok) {
       const data = await res.json()
       setUploadedBanks((prev) => {
-        const existing = prev.find((b) => b.bankName === bankName)
-        if (existing) return prev.map((b) => b.bankName === bankName ? { ...b, count: data.parsed } : b)
-        return [...prev, { bankName, count: data.parsed }]
+        const existing = prev.find((b) => b.bankName === row.bankName)
+        if (existing) return prev.map((b) => b.bankName === row.bankName ? { ...b, count: data.parsed } : b)
+        return [...prev, { bankName: row.bankName, count: data.parsed }]
       })
-      if (data.parsed === 0) {
-        // Keep file + bankName in state so user can analyze and retry
-        setBankSuggest({ status: 'idle', configId: null, editedJson: '', error: '' })
-      } else {
-        setBankFile(null); setBankName('')
-        setBankSuggest(null)
-      }
+      updateRow(id, {
+        suggest: data.parsed === 0
+          ? { status: 'idle', configId: null, editedJson: '', error: '' }
+          : null,
+      })
     } else {
-      const d = await res.json(); setBankError(d.error ?? 'Gagal mengupload file.')
+      const d = await res.json()
+      updateRow(id, { error: d.error ?? 'Gagal mengupload file.' })
     }
-  }, [bankFile, sessions, bankName])
-
-  async function handleBankUpload(e: React.FormEvent) {
-    e.preventDefault()
-    await doUploadBank()
   }
 
-  async function handleAnalyzeConfig() {
-    if (!bankFile || !sessions || !bankName) return
-    setBankSuggest((prev) => prev ? { ...prev, status: 'analyzing', error: '' } : null)
-    const fd = new FormData(); fd.append('file', bankFile); fd.append('bankName', bankName)
+  async function handleAnalyzeConfigRow(id: string) {
+    const row = bankRows.find((r) => r.id === id)
+    if (!row || !row.file || !row.bankName || !sessions) return
+    patchSuggest(id, { status: 'analyzing', error: '' })
+    const fd = new FormData(); fd.append('file', row.file); fd.append('bankName', row.bankName)
     const res = await fetch(`/api/sessions/${sessions.reg.id}/suggest-bank-config`, { method: 'POST', body: fd })
     if (res.ok) {
       const data = await res.json()
-      setBankSuggest((prev) => prev ? {
-        ...prev,
-        status: 'ready',
-        configId: data.configId,
-        editedJson: JSON.stringify(data.suggestion, null, 2),
-      } : null)
+      patchSuggest(id, { status: 'ready', configId: data.configId, editedJson: JSON.stringify(data.suggestion, null, 2) })
     } else {
       const d = await res.json()
-      setBankSuggest((prev) => prev ? { ...prev, status: 'idle', error: d.error ?? 'Gagal menganalisis file.' } : null)
+      patchSuggest(id, { status: 'idle', error: d.error ?? 'Gagal menganalisis file.' })
     }
   }
 
-  async function handleSaveConfig() {
-    if (!bankSuggest?.configId || !bankSuggest.editedJson) return
-    setBankSuggest((prev) => prev ? { ...prev, status: 'saving', error: '' } : null)
+  async function handleSaveConfigRow(id: string) {
+    const row = bankRows.find((r) => r.id === id)
+    if (!row?.suggest?.configId || !row.suggest.editedJson) return
+    patchSuggest(id, { status: 'saving', error: '' })
     let parsed: unknown
-    try {
-      parsed = JSON.parse(bankSuggest.editedJson)
-    } catch {
-      setBankSuggest((prev) => prev ? { ...prev, status: 'ready', error: 'JSON tidak valid. Periksa kembali.' } : null)
+    try { parsed = JSON.parse(row.suggest.editedJson) } catch {
+      patchSuggest(id, { status: 'ready', error: 'JSON tidak valid. Periksa kembali.' })
       return
     }
-    const res = await fetch(`/api/bank-configs/${bankSuggest.configId}`, {
+    const res = await fetch(`/api/bank-configs/${row.suggest.configId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(parsed),
     })
     if (res.ok) {
-      setBankSuggest((prev) => prev ? { ...prev, status: 'saved' } : null)
+      patchSuggest(id, { status: 'saved' })
     } else {
       const d = await res.json()
-      setBankSuggest((prev) => prev ? { ...prev, status: 'ready', error: d.error ?? 'Gagal menyimpan konfigurasi.' } : null)
+      patchSuggest(id, { status: 'ready', error: d.error ?? 'Gagal menyimpan konfigurasi.' })
     }
   }
 
@@ -234,9 +239,9 @@ export default function NewSessionPage() {
   function reset() {
     setStep(1); setSessions(null)
     setCashierFile(null); setCashierResult(null); setCashierError('')
-    setBankFile(null); setBankName(''); setBankError(''); setUploadedBanks([])
+    setBankRows([emptyRow()]); setUploadedBanks([])
     setCreateError(''); setOutletId(''); setSessionDate('')
-    setMatchResult(null); setMatchError(''); setBankSuggest(null)
+    setMatchResult(null); setMatchError('')
   }
 
   const sessionBadges = sessions && (
@@ -351,143 +356,182 @@ export default function NewSessionPage() {
         <div className="space-y-4">
           {sessionBadges}
 
-          {/* Uploaded banks list */}
-          {uploadedBanks.length > 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-              <p className="text-xs font-medium text-slate-500 mb-2 uppercase tracking-wide">Mutasi terupload</p>
-              <div className="space-y-1.5">
-                {uploadedBanks.map((b) => (
-                  <div key={b.bankName} className="flex items-center gap-2 text-sm">
-                    {b.count > 0
-                      ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                      : <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />}
-                    <span className="font-mono font-medium text-slate-700">{b.bankName}</span>
-                    <span className="text-slate-400">—</span>
-                    <span className={b.count === 0 ? 'text-amber-600' : 'text-slate-600'}>
-                      {b.count} mutasi
-                    </span>
-                  </div>
-                ))}
-              </div>
+          {/* Upload rows */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+            <div>
+              <h2 className="font-medium text-slate-700 mb-1">Upload Mutasi Bank</h2>
+              <p className="text-xs text-slate-400">
+                Tambahkan satu baris per bank — mutasi akan disalin otomatis ke sesi REG dan EV.
+              </p>
             </div>
-          )}
 
-          {/* Upload form */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <h2 className="font-medium text-slate-700 mb-1">Upload Mutasi Bank</h2>
-            <p className="text-xs text-slate-400 mb-4">
-              Upload sekali per bank — mutasi akan disalin otomatis ke sesi REG dan EV.
-            </p>
-            <form onSubmit={handleBankUpload} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label>Bank</Label>
-                <Select value={bankName} onValueChange={(v) => { setBankName(v); setBankSuggest(null) }}>
-                  <SelectTrigger><SelectValue placeholder="Pilih bank..." /></SelectTrigger>
-                  <SelectContent>
-                    {bankConfigs.map((b) => (
-                      <SelectItem key={b.id} value={b.bankName}>{b.bankName}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <FileDrop
-                file={bankFile}
-                accept=".xlsx,.xls,.csv"
-                label="File Mutasi (.xlsx / .xls / .csv)"
-                onChange={(f) => { setBankFile(f); setBankError(''); setBankSuggest(null) }}
-              />
-              {bankError && <ErrorMsg msg={bankError} />}
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={reset} className="gap-1.5">
-                  <ArrowLeft className="w-4 h-4" /> Sesi Baru
-                </Button>
-                <Button type="submit" disabled={!bankFile || !bankName || bankUploading} className="flex-1 gap-1.5">
-                  <Upload className="w-4 h-4" />
-                  {bankUploading ? 'Mengupload...' : 'Upload Bank'}
-                </Button>
-              </div>
-            </form>
-          </div>
-
-          {/* ── AI Suggest Config Card (appears when 0 mutations parsed) ── */}
-          {bankSuggest && bankFile && bankName && (
-            <div className="bg-white rounded-xl border border-amber-200 p-5 shadow-sm space-y-3">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-slate-700">
-                    0 mutasi terdeteksi untuk {bankName}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Format file mungkin berbeda dari konfigurasi. AI dapat menganalisis dan menyarankan konfigurasi kolom yang baru.
-                  </p>
-                </div>
-              </div>
-
-              {bankSuggest.status === 'idle' && (
-                <Button
-                  onClick={handleAnalyzeConfig}
-                  variant="outline"
-                  className="gap-2 border-amber-300 hover:bg-amber-50"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-500" />
-                  Analisis Format dengan AI
-                </Button>
-              )}
-
-              {bankSuggest.status === 'analyzing' && (
-                <div className="flex items-center gap-2 text-sm text-slate-500 py-1">
-                  <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
-                  Menganalisis format file dengan AI...
-                </div>
-              )}
-
-              {(bankSuggest.status === 'ready' || bankSuggest.status === 'saving' || bankSuggest.status === 'saved') && (
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-slate-500">
-                      Konfigurasi yang Disarankan AI — edit jika perlu
-                    </Label>
-                    <textarea
-                      className="w-full font-mono text-xs border border-slate-200 rounded-lg p-3 bg-slate-50 resize-y min-h-[180px] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={bankSuggest.editedJson}
-                      onChange={(e) => setBankSuggest((prev) => prev ? { ...prev, editedJson: e.target.value } : null)}
-                      disabled={bankSuggest.status !== 'ready'}
-                      spellCheck={false}
-                    />
-                  </div>
-
-                  {bankSuggest.status === 'saved' ? (
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                      <span className="text-sm text-green-700 flex-1">Konfigurasi berhasil disimpan.</span>
+            <div className="space-y-3">
+              {bankRows.map((row, idx) => {
+                const uploaded = uploadedBanks.find((b) => b.bankName === row.bankName)
+                const isDone = uploaded && !row.suggest
+                return (
+                  <div key={row.id} className="space-y-2">
+                    {/* Row: bank select + file + upload btn + remove btn */}
+                    <div className="flex items-start gap-2">
+                      <div className="flex-shrink-0 w-32">
+                        <Select
+                          value={row.bankName}
+                          onValueChange={(v) => updateRow(row.id, { bankName: v, suggest: null })}
+                          disabled={!!isDone}
+                        >
+                          <SelectTrigger className="h-9 text-sm">
+                            <SelectValue placeholder="Bank..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {bankConfigs.map((b) => (
+                              <SelectItem key={b.id} value={b.bankName}>{b.bankName}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <label className={cn(
+                        'flex items-center gap-2 flex-1 min-w-0 border rounded-lg px-3 h-9 cursor-pointer transition-colors text-sm',
+                        isDone ? 'border-green-300 bg-green-50' :
+                        row.file ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300',
+                      )}>
+                        {isDone
+                          ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                          : <FileSpreadsheet className="w-4 h-4 text-slate-400 shrink-0" />}
+                        <span className={cn(
+                          'truncate',
+                          isDone ? 'text-green-700' : row.file ? 'text-blue-700 font-medium' : 'text-slate-400',
+                        )}>
+                          {isDone
+                            ? `${uploaded!.count} mutasi`
+                            : row.file ? row.file.name : 'Pilih file (.xlsx/.xls/.csv)'}
+                        </span>
+                        {!isDone && (
+                          <input
+                            type="file"
+                            accept=".xlsx,.xls,.csv"
+                            className="hidden"
+                            onChange={(e) => updateRow(row.id, { file: e.target.files?.[0] ?? null, error: '', suggest: null })}
+                          />
+                        )}
+                      </label>
                       <Button
+                        type="button"
                         size="sm"
-                        onClick={doUploadBank}
-                        disabled={bankUploading}
-                        className="gap-1.5"
+                        disabled={!row.file || !row.bankName || row.uploading || !!isDone}
+                        onClick={() => doUploadBankRow(row.id)}
+                        className="h-9 shrink-0 gap-1.5"
                       >
-                        <Upload className="w-3 h-3" />
-                        {bankUploading ? 'Mengupload...' : 'Coba Ulang Upload'}
+                        {row.uploading
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Upload className="w-4 h-4" />}
+                        {row.uploading ? 'Upload...' : isDone ? 'Terupload' : 'Upload'}
                       </Button>
+                      {bankRows.length > 1 && !isDone && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 w-9 p-0 shrink-0 text-slate-400 hover:text-red-500"
+                          onClick={() => setBankRows((prev) => prev.filter((r) => r.id !== row.id))}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
-                  ) : (
-                    <Button
-                      onClick={handleSaveConfig}
-                      disabled={bankSuggest.status === 'saving'}
-                      className="w-full gap-1.5"
-                    >
-                      {bankSuggest.status === 'saving'
-                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan...</>
-                        : 'Simpan Konfigurasi'}
-                    </Button>
-                  )}
-                </div>
-              )}
 
-              {bankSuggest.error && <ErrorMsg msg={bankSuggest.error} />}
+                    {row.error && <ErrorMsg msg={row.error} />}
+
+                    {/* AI Suggest card — appears when 0 mutations parsed */}
+                    {row.suggest && row.file && row.bankName && (
+                      <div className="ml-0 rounded-lg border border-amber-200 bg-amber-50/60 p-4 space-y-3">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-slate-700">
+                              0 mutasi terdeteksi untuk {row.bankName}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Format file mungkin berbeda. AI dapat menganalisis dan menyarankan konfigurasi kolom.
+                            </p>
+                          </div>
+                        </div>
+
+                        {row.suggest.status === 'idle' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleAnalyzeConfigRow(row.id)}
+                            className="gap-2 border-amber-300 hover:bg-amber-100"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                            Analisis Format dengan AI
+                          </Button>
+                        )}
+
+                        {row.suggest.status === 'analyzing' && (
+                          <div className="flex items-center gap-2 text-sm text-slate-500">
+                            <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                            Menganalisis dengan AI...
+                          </div>
+                        )}
+
+                        {(row.suggest.status === 'ready' || row.suggest.status === 'saving' || row.suggest.status === 'saved') && (
+                          <div className="space-y-2">
+                            <Label className="text-xs text-slate-500">Konfigurasi Disarankan AI — edit jika perlu</Label>
+                            <textarea
+                              className="w-full font-mono text-xs border border-slate-200 rounded-lg p-3 bg-white resize-y min-h-[160px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              value={row.suggest.editedJson}
+                              onChange={(e) => patchSuggest(row.id, { editedJson: e.target.value })}
+                              disabled={row.suggest.status !== 'ready'}
+                              spellCheck={false}
+                            />
+                            {row.suggest.status === 'saved' ? (
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                                <span className="text-sm text-green-700 flex-1">Konfigurasi disimpan.</span>
+                                <Button size="sm" onClick={() => doUploadBankRow(row.id)} disabled={row.uploading} className="gap-1.5">
+                                  <Upload className="w-3 h-3" />
+                                  {row.uploading ? 'Mengupload...' : 'Coba Ulang'}
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveConfigRow(row.id)}
+                                disabled={row.suggest.status === 'saving'}
+                                className="gap-1.5"
+                              >
+                                {row.suggest.status === 'saving'
+                                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Menyimpan...</>
+                                  : 'Simpan Konfigurasi'}
+                              </Button>
+                            )}
+                            {row.suggest.error && <ErrorMsg msg={row.suggest.error} />}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {idx < bankRows.length - 1 && <div className="border-t border-slate-100" />}
+                  </div>
+                )
+              })}
             </div>
-          )}
+
+            <div className="flex gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={reset} className="gap-1.5">
+                <ArrowLeft className="w-4 h-4" /> Sesi Baru
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setBankRows((prev) => [...prev, emptyRow()])}
+                className="gap-1.5 flex-1"
+              >
+                <Plus className="w-4 h-4" /> Tambah Bank
+              </Button>
+            </div>
+          </div>
 
           {uploadedBanks.length > 0 && (
             <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-3">
@@ -500,13 +544,10 @@ export default function NewSessionPage() {
               {matchError && <ErrorMsg msg={matchError} />}
               {matchResult ? (
                 <div className="space-y-4">
-                  {/* REG block results */}
                   <MatchBlock label="REG — Jam Reguler" color="blue" stats={matchResult.reg} />
-                  {/* EV block results (only when EV had data) */}
                   {matchResult.ev && (
                     <MatchBlock label="EV — Jam Event" color="purple" stats={matchResult.ev} />
                   )}
-                  {/* Review links */}
                   <Link href={`/sessions/${sessions.reg.id}/review`}>
                     <Button className="w-full gap-1.5">
                       <Eye className="w-4 h-4" />
