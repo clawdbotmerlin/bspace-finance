@@ -52,6 +52,7 @@ Use `expect` with password `makeithappen` for automated deploy (see previous ses
 | FRO-26 / FIN-16 | Notifications | ✅ Done |
 | FRO-27       | Self-healing parser (LLM re-config) | ✅ Done |
 | FRO-28 / FIN-17 | Cashier parser v3 template support | ✅ Done |
+| FRO-29       | Multi-file bank upload in Upload Mutasi Bank step | ✅ Done |
 
 ## Key File Map
 ```
