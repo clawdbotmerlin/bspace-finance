@@ -16,7 +16,6 @@ import { cn } from '@/lib/utils'
 interface SessionRow {
   id: string
   sessionDate: string
-  blockType: string
   status: string
   submittedAt: string | null
   outlet: { name: string; code: string }
@@ -306,7 +305,6 @@ export default function DashboardPage() {
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Tanggal</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Outlet</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Blok</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Kasir</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Bank</th>
@@ -330,16 +328,6 @@ export default function DashboardPage() {
                         <td className="px-4 py-3">
                           <p className="font-medium text-slate-800 text-xs">{s.outlet.name}</p>
                           <p className="text-[10px] text-slate-400 mt-0.5 font-mono">{s.outlet.code}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={cn(
-                            'text-[11px] font-bold px-2 py-0.5 rounded',
-                            s.blockType === 'REG'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-purple-100 text-purple-700',
-                          )}>
-                            {s.blockType}
-                          </span>
                         </td>
                         <td className="px-4 py-3">{statusBadge(s.status)}</td>
                         <td className="px-4 py-3 text-center text-xs">

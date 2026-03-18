@@ -50,7 +50,6 @@ export const GET = withAuth(async (req: NextRequest) => {
           select: {
             id: true,
             sessionDate: true,
-            blockType: true,
             status: true,
             outlet: { select: { id: true, name: true, code: true } },
           },

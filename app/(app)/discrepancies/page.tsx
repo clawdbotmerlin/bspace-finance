@@ -22,7 +22,6 @@ import { cn, formatRupiah } from '@/lib/utils'
 interface DiscrepancySession {
   id: string
   sessionDate: string
-  blockType: string
   status: string
   outlet: { id: string; name: string; code: string }
 }
@@ -211,7 +210,7 @@ function ResolveDialog({ disc, onClose, onSaved }: {
         </DialogHeader>
 
         <div className="mt-1 space-y-1 text-sm text-slate-600 bg-slate-50 rounded-lg p-3">
-          <p><span className="font-medium">Sesi:</span> {disc.session.outlet.name} · {fmtSessionDate(disc.session.sessionDate)} · {disc.session.blockType}</p>
+          <p><span className="font-medium">Sesi:</span> {disc.session.outlet.name} · {fmtSessionDate(disc.session.sessionDate)}</p>
           <p><span className="font-medium">Tipe:</span> {TYPE_LABELS[disc.discrepancyType] ?? disc.discrepancyType}</p>
           {disc.cashierEntry && (
             <p><span className="font-medium">Kasir:</span> {disc.cashierEntry.bankName} — {formatRupiah(Number(disc.cashierEntry.amount))}</p>
@@ -564,14 +563,6 @@ export default function DiscrepanciesPage() {
                           <div className="flex items-center gap-1.5">
                             <span className="text-[10px] text-slate-400">
                               {fmtSessionDate(d.session.sessionDate)}
-                            </span>
-                            <span className={cn(
-                              'text-[9px] font-bold px-1 py-0.5 rounded',
-                              d.session.blockType === 'REG'
-                                ? 'bg-blue-100 text-blue-600'
-                                : 'bg-purple-100 text-purple-600',
-                            )}>
-                              {d.session.blockType}
                             </span>
                           </div>
                         </div>

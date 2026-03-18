@@ -17,7 +17,6 @@ interface SignoffSessionDetail {
   id: string
   outletId: string
   sessionDate: string
-  blockType: string
   status: string
   submittedAt: string | null
   signedOffAt: string | null
@@ -302,12 +301,6 @@ export default function SignoffPage() {
             {new Date(session.sessionDate).toLocaleDateString('id-ID', {
               day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
             })}
-          </Badge>
-          <Badge className={cn(
-            session.blockType === 'REG' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700',
-            'border-0',
-          )}>
-            {session.blockType}
           </Badge>
           {statusBadge(session.status)}
         </div>

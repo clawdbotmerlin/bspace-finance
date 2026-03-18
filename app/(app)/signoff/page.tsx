@@ -4,12 +4,10 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ClipboardCheck, Loader2, ArrowRight, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 
 interface PendingSession {
   id: string
   sessionDate: string
-  blockType: string
   status: string
   submittedAt: string | null
   outlet: { name: string; code: string }
@@ -94,9 +92,6 @@ export default function SignoffQueuePage() {
                   Tanggal Sesi
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  Blok
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
                   Disubmit Oleh
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -124,18 +119,6 @@ export default function SignoffQueuePage() {
                       year: 'numeric',
                       timeZone: 'UTC',
                     })}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={cn(
-                        'text-xs font-semibold px-2 py-0.5 rounded',
-                        s.blockType === 'REG'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-purple-100 text-purple-700',
-                      )}
-                    >
-                      {s.blockType}
-                    </span>
                   </td>
                   <td className="px-4 py-3 text-slate-600 text-xs">
                     {s.submitter?.name ?? '—'}
