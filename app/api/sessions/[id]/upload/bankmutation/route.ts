@@ -36,55 +36,27 @@ export const POST = withAuth(async (req: NextRequest) => {
   const buffer = await file.arrayBuffer()
   const result = parseBankMutationFile(buffer, config, session.sessionDate)
 
-  // Find paired session (same outlet + date, opposite blockType) and check if it has
-  // cashier entries — only mirror bank mutations when there is actual cashier data to match
-  const pairedBlockType = session.blockType === 'REG' ? 'EV' : 'REG'
-  const pairedSession = await prisma.reconciliationSession.findUnique({
-    where: {
-      outletId_sessionDate_blockType: {
-        outletId:    session.outletId,
-        sessionDate: session.sessionDate,
-        blockType:   pairedBlockType,
-      },
-    },
-  })
-
-  const pairedHasEntries = pairedSession
-    ? (await prisma.cashierEntry.count({ where: { sessionId: pairedSession.id } })) > 0
-    : false
-
   // Re-upload for the same bank replaces existing mutations (unless append mode for multi-file)
   if (!appendMode) {
     await prisma.bankMutation.deleteMany({ where: { sessionId, bankName } })
-    if (pairedSession && pairedHasEntries) {
-      await prisma.bankMutation.deleteMany({ where: { sessionId: pairedSession.id, bankName } })
-    }
   }
 
   if (result.mutations.length > 0) {
-    const mutationData = result.mutations.map((m: typeof result.mutations[number]) => ({
-      bankName:        m.bankName,
-      accountNumber:   m.accountNumber,
-      transactionDate: new Date(m.transactionDate),
-      description:     m.description,
-      grossAmount:     m.grossAmount,
-      direction:       m.direction,
-      referenceNo:     m.referenceNo,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rawData:         m.rawData as any,
-      matchStatus:     'unmatched' as const,
-    }))
-
     await prisma.bankMutation.createMany({
-      data: mutationData.map((m) => ({ ...m, sessionId })),
+      data: result.mutations.map((m: typeof result.mutations[number]) => ({
+        sessionId,
+        bankName:        m.bankName,
+        accountNumber:   m.accountNumber,
+        transactionDate: new Date(m.transactionDate),
+        description:     m.description,
+        grossAmount:     m.grossAmount,
+        direction:       m.direction,
+        referenceNo:     m.referenceNo,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        rawData:         m.rawData as any,
+        matchStatus:     'unmatched' as const,
+      })),
     })
-
-    // Mirror to the paired session only when it has cashier data to reconcile against
-    if (pairedSession && pairedHasEntries) {
-      await prisma.bankMutation.createMany({
-        data: mutationData.map((m) => ({ ...m, sessionId: pairedSession.id })),
-      })
-    }
   }
 
   return NextResponse.json({

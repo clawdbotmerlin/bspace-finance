@@ -20,7 +20,6 @@ interface SessionDetail {
   id: string
   outletId: string
   sessionDate: string
-  blockType: string
   status: string
   outlet: { name: string; code: string }
 }
@@ -45,6 +44,7 @@ interface CashierEntryFull {
   terminalId: string | null
   paymentType: string
   amount: string
+  notaBill: string | null
   entityNameRaw: string | null
   sourceRow: number | null
   matchStatus: string
@@ -347,9 +347,6 @@ export default function ReviewPage() {
             <Badge variant="outline">
               {new Date(session.sessionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}
             </Badge>
-            <Badge className={cn('border-0', session.blockType === 'REG' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700')}>
-              {session.blockType}
-            </Badge>
             {statusBadge(session.status)}
           </div>
           <div className="flex items-center gap-2">
@@ -615,6 +612,9 @@ function EntryRow({
         </div>
         {entry.terminalId && (
           <p className="text-[11px] text-slate-500 font-mono mt-0.5">{entry.terminalId}</p>
+        )}
+        {entry.notaBill && (
+          <p className="text-[10px] text-slate-400 font-mono mt-0.5">nota: {entry.notaBill}</p>
         )}
         {/* Batch annotation */}
         {isBatched && isFirstInBatch && batchPeers[1] && (

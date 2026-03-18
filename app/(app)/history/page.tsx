@@ -15,7 +15,6 @@ import { cn } from '@/lib/utils'
 interface SessionRow {
   id: string
   sessionDate: string
-  blockType: string
   status: string
   submittedAt: string | null
   signedOffAt: string | null
@@ -25,52 +24,16 @@ interface SessionRow {
   _count: { cashierEntries: number; bankMutations: number }
 }
 
-// One row in the table = REG + EV pair for the same outlet + date
-interface SessionGroup {
-  key: string
-  sessionDate: string
-  outlet: { name: string; code: string }
-  reg: SessionRow | null
-  ev: SessionRow | null
-}
-
 type SortField = 'sessionDate' | 'outlet' | 'status'
 type SortDir = 'asc' | 'desc'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-// Canonical status priority (higher = more progressed)
 const STATUS_RANK: Record<string, number> = {
   uploading: 0, reviewing: 1, pending_signoff: 2, signed_off: 3,
 }
 
-function groupSessions(sessions: SessionRow[]): SessionGroup[] {
-  const map = new Map<string, SessionGroup>()
-  for (const s of sessions) {
-    const key = `${s.outlet.code}|${s.sessionDate}`
-    if (!map.has(key)) {
-      map.set(key, { key, sessionDate: s.sessionDate, outlet: s.outlet, reg: null, ev: null })
-    }
-    const g = map.get(key)!
-    // Keep the most-progressed session for each blockType (in case of duplicates from FRO-30)
-    if (s.blockType === 'REG') {
-      if (!g.reg || (STATUS_RANK[s.status] ?? 0) > (STATUS_RANK[g.reg.status] ?? 0)) g.reg = s
-    } else {
-      if (!g.ev || (STATUS_RANK[s.status] ?? 0) > (STATUS_RANK[g.ev.status] ?? 0)) g.ev = s
-    }
-  }
-  return Array.from(map.values())
-}
-
-// "Overall" status of a group = highest-priority block's status
-function groupStatus(g: SessionGroup): string {
-  const statuses = [g.reg?.status, g.ev?.status].filter(Boolean) as string[]
-  if (statuses.length === 0) return 'uploading'
-  return statuses.reduce((best, s) => (STATUS_RANK[s] ?? 0) > (STATUS_RANK[best] ?? 0) ? s : best)
-}
-
-function statusBadge(status: string | undefined) {
-  if (!status) return <span className="text-slate-300 text-xs">—</span>
+function statusBadge(status: string) {
   const map: Record<string, { variant: 'warning' | 'info' | 'success' | 'outline'; label: string }> = {
     uploading: { variant: 'outline', label: 'Uploading' },
     reviewing: { variant: 'warning', label: 'Menunggu Review' },
@@ -81,38 +44,36 @@ function statusBadge(status: string | undefined) {
   return <Badge variant={s.variant} className="text-[11px] whitespace-nowrap">{s.label}</Badge>
 }
 
-function BlockActionCell({ s, label }: { s: SessionRow; label: string }) {
-  const blockColor = label === 'REG'
-    ? 'bg-blue-100 text-blue-700'
-    : 'bg-purple-100 text-purple-700'
-
-  let action = null
+function ActionCell({ s }: { s: SessionRow }) {
   if (s.status === 'uploading') {
-    action = (
+    return (
       <Link href={`/sessions/new?resumeId=${s.id}`}>
         <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
           <ArrowRight className="w-3 h-3" /> Lanjutkan
         </Button>
       </Link>
     )
-  } else if (s.status === 'reviewing') {
-    action = (
+  }
+  if (s.status === 'reviewing') {
+    return (
       <Link href={`/sessions/${s.id}/review`}>
         <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
           <Eye className="w-3 h-3" /> Review
         </Button>
       </Link>
     )
-  } else if (s.status === 'pending_signoff') {
-    action = (
+  }
+  if (s.status === 'pending_signoff') {
+    return (
       <Link href={`/sessions/${s.id}/signoff`}>
         <Button size="sm" className="gap-1 text-xs h-7 px-2.5">
           <ClipboardCheck className="w-3 h-3" /> TTD
         </Button>
       </Link>
     )
-  } else if (s.status === 'signed_off') {
-    action = (
+  }
+  if (s.status === 'signed_off') {
+    return (
       <Link href={`/sessions/${s.id}/signoff`}>
         <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
           <Eye className="w-3 h-3" /> Lihat
@@ -120,15 +81,7 @@ function BlockActionCell({ s, label }: { s: SessionRow; label: string }) {
       </Link>
     )
   }
-
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0', blockColor)}>
-        {label}
-      </span>
-      {action ?? <span className="text-xs text-slate-300">—</span>}
-    </div>
-  )
+  return <span className="text-xs text-slate-300">—</span>
 }
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
@@ -170,16 +123,10 @@ export default function HistoryPage() {
     }
   }
 
-  const groups = useMemo(() => groupSessions(sessions), [sessions])
-
   const filtered = useMemo(() => {
-    const result = groups.filter((g) => {
-      if (searchOutlet && !g.outlet.name.toLowerCase().includes(searchOutlet.toLowerCase())) return false
-      if (filterStatus) {
-        // Show group if either REG or EV matches the status
-        const hasMatch = (g.reg?.status === filterStatus) || (g.ev?.status === filterStatus)
-        if (!hasMatch) return false
-      }
+    const result = sessions.filter((s) => {
+      if (searchOutlet && !s.outlet.name.toLowerCase().includes(searchOutlet.toLowerCase())) return false
+      if (filterStatus && s.status !== filterStatus) return false
       return true
     })
 
@@ -190,15 +137,14 @@ export default function HistoryPage() {
       } else if (sortField === 'outlet') {
         cmp = a.outlet.name.localeCompare(b.outlet.name)
       } else if (sortField === 'status') {
-        cmp = (STATUS_RANK[groupStatus(a)] ?? 0) - (STATUS_RANK[groupStatus(b)] ?? 0)
+        cmp = (STATUS_RANK[a.status] ?? 0) - (STATUS_RANK[b.status] ?? 0)
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [groups, filterStatus, searchOutlet, sortField, sortDir])
+  }, [sessions, filterStatus, searchOutlet, sortField, sortDir])
 
   const hasFilters = !!(searchOutlet || filterStatus)
 
-  // Counts based on individual sessions (for status chips)
   const counts = useMemo(() => ({
     uploading: sessions.filter((s) => s.status === 'uploading').length,
     reviewing: sessions.filter((s) => s.status === 'reviewing').length,
@@ -307,7 +253,7 @@ export default function HistoryPage() {
         <div className="flex flex-col items-center justify-center py-24 text-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm">
           <History className="w-12 h-12 mb-3 opacity-20" />
           <p className="text-sm font-medium text-slate-500">
-            {groups.length === 0
+            {sessions.length === 0
               ? 'Belum ada sesi rekonsiliasi'
               : 'Tidak ada sesi yang cocok dengan filter'}
           </p>
@@ -328,8 +274,8 @@ export default function HistoryPage() {
           <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/50">
             <span className="text-xs text-slate-500">
               <span className="font-semibold text-slate-700">{filtered.length}</span> sesi
-              {filtered.length !== groups.length && (
-                <> dari <span className="font-semibold text-slate-700">{groups.length}</span> total</>
+              {filtered.length !== sessions.length && (
+                <> dari <span className="font-semibold text-slate-700">{sessions.length}</span> total</>
               )}
             </span>
           </div>
@@ -371,106 +317,67 @@ export default function HistoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((g) => {
-                  const submitter = g.reg?.submitter ?? g.ev?.submitter ?? null
-                  const submittedAt = g.reg?.submittedAt ?? g.ev?.submittedAt ?? null
-                  // Bank mutations are mirrored — show the count from whichever session has data
-                  const bankCount = Math.max(
-                    g.reg?._count.bankMutations ?? 0,
-                    g.ev?._count.bankMutations ?? 0,
-                  )
+                {filtered.map((s) => (
+                  <tr
+                    key={s.id}
+                    className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors"
+                  >
+                    {/* Date */}
+                    <td className="px-4 py-3 text-slate-700 text-xs font-medium whitespace-nowrap">
+                      {new Date(s.sessionDate).toLocaleDateString('id-ID', {
+                        day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+                      })}
+                    </td>
 
-                  return (
-                    <tr
-                      key={g.key}
-                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors"
-                    >
-                      {/* Date */}
-                      <td className="px-4 py-3 text-slate-700 text-xs font-medium whitespace-nowrap">
-                        {new Date(g.sessionDate).toLocaleDateString('id-ID', {
-                          day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
-                        })}
-                      </td>
+                    {/* Outlet */}
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-slate-800 text-xs">{s.outlet.name}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5 font-mono">{s.outlet.code}</p>
+                    </td>
 
-                      {/* Outlet */}
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-slate-800 text-xs">{g.outlet.name}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5 font-mono">{g.outlet.code}</p>
-                      </td>
+                    {/* Status */}
+                    <td className="px-4 py-3">
+                      {statusBadge(s.status)}
+                    </td>
 
-                      {/* Status — stacked REG + EV */}
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1">
-                          {g.reg && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded shrink-0">REG</span>
-                              {statusBadge(g.reg.status)}
-                            </div>
+                    {/* Kasir */}
+                    <td className="px-4 py-3 text-center text-xs">
+                      {s._count.cashierEntries > 0
+                        ? <span className="font-semibold text-slate-700">{s._count.cashierEntries}</span>
+                        : <span className="text-slate-300">—</span>}
+                    </td>
+
+                    {/* Bank */}
+                    <td className="px-4 py-3 text-center text-xs">
+                      {s._count.bankMutations > 0
+                        ? <span className="font-semibold text-slate-700">{s._count.bankMutations}</span>
+                        : <span className="text-slate-300">—</span>}
+                    </td>
+
+                    {/* Submitted */}
+                    <td className="px-4 py-3">
+                      {s.submitter ? (
+                        <>
+                          <p className="text-xs text-slate-600">{s.submitter.name}</p>
+                          {s.submittedAt && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              {new Date(s.submittedAt).toLocaleDateString('id-ID', {
+                                day: 'numeric', month: 'short', year: 'numeric',
+                              })}
+                            </p>
                           )}
-                          {g.ev && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded shrink-0">EV</span>
-                              {statusBadge(g.ev.status)}
-                            </div>
-                          )}
-                        </div>
-                      </td>
+                        </>
+                      ) : (
+                        <span className="text-xs text-slate-300">—</span>
+                      )}
+                    </td>
 
-                      {/* Kasir — stacked REG + EV counts */}
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex flex-col gap-0.5 items-center">
-                          {g.reg && (
-                            <span className="text-xs">
-                              {g.reg._count.cashierEntries > 0
-                                ? <span className="font-semibold text-slate-700">{g.reg._count.cashierEntries}</span>
-                                : <span className="text-slate-300">—</span>}
-                            </span>
-                          )}
-                          {g.ev && (
-                            <span className="text-xs text-slate-400">
-                              {g.ev._count.cashierEntries > 0
-                                ? <span className="font-semibold text-slate-500">{g.ev._count.cashierEntries}</span>
-                                : <span className="text-slate-300">—</span>}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Bank — shared count */}
-                      <td className="px-4 py-3 text-center text-xs">
-                        {bankCount > 0
-                          ? <span className="font-semibold text-slate-700">{bankCount}</span>
-                          : <span className="text-slate-300">—</span>}
-                      </td>
-
-                      {/* Submitted */}
-                      <td className="px-4 py-3">
-                        {submitter ? (
-                          <>
-                            <p className="text-xs text-slate-600">{submitter.name}</p>
-                            {submittedAt && (
-                              <p className="text-[10px] text-slate-400 mt-0.5">
-                                {new Date(submittedAt).toLocaleDateString('id-ID', {
-                                  day: 'numeric', month: 'short', year: 'numeric',
-                                })}
-                              </p>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-xs text-slate-300">—</span>
-                        )}
-                      </td>
-
-                      {/* Actions — stacked REG + EV */}
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1 items-end">
-                          {g.reg && <BlockActionCell s={g.reg} label="REG" />}
-                          {g.ev && <BlockActionCell s={g.ev} label="EV" />}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
+                    {/* Action */}
+                    <td className="px-4 py-3 text-right">
+                      <ActionCell s={s} />
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

@@ -20,6 +20,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       terminalId: true,
       paymentType: true,
       amount: true,
+      notaBill: true,
       entityNameRaw: true,
       sourceRow: true,
       matchStatus: true,

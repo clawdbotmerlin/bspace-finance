@@ -22,11 +22,6 @@ enum SessionStatus {
   signed_off
 }
 
-enum BlockType {
-  REG
-  EV
-}
-
 enum PaymentType {
   QR
   DEBIT
@@ -143,7 +138,6 @@ model ReconciliationSession {
   id             String        @id @default(cuid())
   outletId       String
   sessionDate    DateTime      @db.Date
-  blockType      BlockType
   status         SessionStatus @default(uploading)
   submittedBy    String?
   submittedAt    DateTime?
@@ -161,7 +155,7 @@ model ReconciliationSession {
   discrepancies  Discrepancy[]
   auditLogs      AuditLog[]
 
-  @@unique([outletId, sessionDate, blockType])
+  @@unique([outletId, sessionDate])
 }
 
 model CashierEntry {

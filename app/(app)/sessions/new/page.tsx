@@ -21,11 +21,8 @@ interface Session {
   id: string
   outletId: string
   sessionDate: string
-  blockType: string
   outlet: { name: string; code: string }
 }
-
-interface SessionPair { reg: Session; ev: Session }
 
 interface CashierResult {
   reg: { parsed: number }
@@ -41,11 +38,6 @@ interface MatchStats {
   unexpectedBank: number
   amountMismatches: number
   discrepancies: number
-}
-
-interface MatchResult {
-  reg: MatchStats
-  ev: MatchStats | null   // null when EV had no cashier entries
 }
 
 interface UploadedBank {
@@ -69,7 +61,7 @@ function NewSessionPage() {
   const [sessionDate, setSessionDate] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
-  const [sessions, setSessions] = useState<SessionPair | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
 
   // Step 2 – cashier upload
   const [cashierFile, setCashierFile] = useState<File | null>(null)
@@ -90,7 +82,7 @@ function NewSessionPage() {
   // Step 3 – matching
   const [matching, setMatching] = useState(false)
   const [matchError, setMatchError] = useState('')
-  const [matchResult, setMatchResult] = useState<MatchResult | null>(null)
+  const [matchResult, setMatchResult] = useState<MatchStats | null>(null)
 
   useEffect(() => {
     fetch('/api/outlets').then((r) => r.json()).then(setOutlets)
@@ -102,23 +94,11 @@ function NewSessionPage() {
     const resumeId = searchParams.get('resumeId')
     if (!resumeId) return
     async function loadResume() {
-      const [detailRes, allRes] = await Promise.all([
-        fetch(`/api/sessions/${resumeId}`),
-        fetch('/api/sessions'),
-      ])
-      if (!detailRes.ok) return
-      const detail = await detailRes.json()
-      const all: Array<Session & { _count: { cashierEntries: number; bankMutations: number } }> = await allRes.json()
-      const pair = all.find((s) =>
-        s.outletId === detail.outletId &&
-        s.sessionDate === detail.sessionDate &&
-        s.blockType !== detail.blockType
-      )
-      if (!pair) return
-      const reg = detail.blockType === 'REG' ? detail : pair
-      const ev  = detail.blockType === 'EV'  ? detail : pair
-      setSessions({ reg, ev })
-      const hasCashier = (detail._count?.cashierEntries ?? 0) > 0 || (pair._count?.cashierEntries ?? 0) > 0
+      const res = await fetch(`/api/sessions/${resumeId}`)
+      if (!res.ok) return
+      const detail = await res.json()
+      setSession(detail)
+      const hasCashier = (detail._count?.cashierEntries ?? 0) > 0
       setStep(hasCashier ? 3 : 2)
     }
     loadResume()
@@ -136,7 +116,7 @@ function NewSessionPage() {
     setCreating(false)
     if (res.ok) {
       const data = await res.json()
-      setSessions({ reg: data.reg, ev: data.ev })
+      setSession(data.session)
       setStep(2)
     } else {
       const d = await res.json()
@@ -146,11 +126,10 @@ function NewSessionPage() {
 
   async function handleCashierUpload(e: React.FormEvent) {
     e.preventDefault()
-    if (!cashierFile || !sessions) return
+    if (!cashierFile || !session) return
     setCashierError(''); setCashierResult(null); setCashierUploading(true)
     const fd = new FormData(); fd.append('file', cashierFile)
-    // Upload to the REG session — the API internally populates both REG and EV
-    const res = await fetch(`/api/sessions/${sessions.reg.id}/upload/cashier`, { method: 'POST', body: fd })
+    const res = await fetch(`/api/sessions/${session.id}/upload/cashier`, { method: 'POST', body: fd })
     setCashierUploading(false)
     if (res.ok) {
       setCashierResult(await res.json())
@@ -165,7 +144,7 @@ function NewSessionPage() {
 
   async function doUploadBankRow(id: string) {
     const row = bankRows.find((r) => r.id === id)
-    if (!row || !row.files.length || !row.bankName || !sessions) return
+    if (!row || !row.files.length || !row.bankName || !session) return
     updateRow(id, { uploading: true, error: '' })
     let totalParsed = 0
     for (let i = 0; i < row.files.length; i++) {
@@ -173,7 +152,7 @@ function NewSessionPage() {
       fd.append('file', row.files[i])
       fd.append('bankName', row.bankName)
       if (i > 0) fd.append('append', 'true')
-      const res = await fetch(`/api/sessions/${sessions.reg.id}/upload/bankmutation`, { method: 'POST', body: fd })
+      const res = await fetch(`/api/sessions/${session.id}/upload/bankmutation`, { method: 'POST', body: fd })
       if (!res.ok) {
         const d = await res.json()
         updateRow(id, { uploading: false, error: d.error ?? 'Gagal mengupload file.' })
@@ -191,53 +170,37 @@ function NewSessionPage() {
   }
 
   async function handleRunMatching() {
-    if (!sessions) return
+    if (!session) return
     setMatchError('')
     setMatching(true)
-
-    const evHasEntries = cashierResult && cashierResult.ev.parsed > 0
-
-    const [regRes, evRes] = await Promise.all([
-      fetch(`/api/sessions/${sessions.reg.id}/run-matching`, { method: 'POST' }),
-      evHasEntries
-        ? fetch(`/api/sessions/${sessions.ev.id}/run-matching`, { method: 'POST' })
-        : Promise.resolve(null),
-    ])
-
+    const res = await fetch(`/api/sessions/${session.id}/run-matching`, { method: 'POST' })
     setMatching(false)
-
-    if (!regRes.ok) {
-      const d = await regRes.json()
+    if (!res.ok) {
+      const d = await res.json()
       setMatchError(d.error ?? 'Gagal menjalankan rekonsiliasi.')
       return
     }
-
-    const regData: MatchStats = await regRes.json()
-    const evData: MatchStats | null = evRes && evRes.ok ? await evRes.json() : null
-    setMatchResult({ reg: regData, ev: evData })
+    setMatchResult(await res.json())
   }
 
   function reset() {
-    setStep(1); setSessions(null)
+    setStep(1); setSession(null)
     setCashierFile(null); setCashierResult(null); setCashierError('')
     setBankRows([emptyRow()]); setUploadedBanks([])
     setCreateError(''); setOutletId(''); setSessionDate('')
     setMatchResult(null); setMatchError('')
-    // Clear resumeId from URL without reload
     window.history.replaceState({}, '', '/sessions/new')
   }
 
-  const sessionBadges = sessions && (
+  const sessionBadge = session && (
     <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
       <div className="flex items-center gap-2 flex-wrap">
-        <Badge variant="outline" className="font-medium">{sessions.reg.outlet.name}</Badge>
+        <Badge variant="outline" className="font-medium">{session.outlet.name}</Badge>
         <Badge variant="outline">
-          {new Date(sessions.reg.sessionDate).toLocaleDateString('id-ID', {
+          {new Date(session.sessionDate).toLocaleDateString('id-ID', {
             day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
           })}
         </Badge>
-        <Badge className="bg-blue-100 text-blue-700 border-0">REG</Badge>
-        <Badge className="bg-purple-100 text-purple-700 border-0">EV</Badge>
       </div>
     </div>
   )
@@ -280,10 +243,6 @@ function NewSessionPage() {
               <Label>Tanggal</Label>
               <Input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} required />
             </div>
-            {/* Blok selector removed — both REG and EV are created and detected automatically */}
-            <p className="text-xs text-slate-400 -mt-1">
-              Sesi REG dan EV akan dibuat otomatis berdasarkan isi file kasir.
-            </p>
             {createError && <ErrorMsg msg={createError} />}
             <Button type="submit" disabled={creating || !outletId || !sessionDate} className="w-full">
               {creating ? 'Membuat...' : 'Buat Sesi →'}
@@ -293,9 +252,9 @@ function NewSessionPage() {
       )}
 
       {/* ── Step 2: Cashier upload ─────────────────────────────────── */}
-      {step === 2 && sessions && (
+      {step === 2 && session && (
         <div className="space-y-4">
-          {sessionBadges}
+          {sessionBadge}
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
             <h2 className="font-medium text-slate-700 mb-1">Upload Laporan Kasir</h2>
             <p className="text-xs text-slate-400 mb-4">
@@ -335,16 +294,16 @@ function NewSessionPage() {
       )}
 
       {/* ── Step 3: Bank mutation uploads ─────────────────────────── */}
-      {step === 3 && sessions && (
+      {step === 3 && session && (
         <div className="space-y-4">
-          {sessionBadges}
+          {sessionBadge}
 
           {/* Upload rows */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
             <div>
               <h2 className="font-medium text-slate-700 mb-1">Upload Mutasi Bank</h2>
               <p className="text-xs text-slate-400">
-                Tambahkan satu baris per bank — mutasi akan disalin otomatis ke sesi REG dan EV.
+                Tambahkan satu baris per bank.
               </p>
             </div>
 
@@ -353,7 +312,6 @@ function NewSessionPage() {
                 const uploaded = uploadedBanks.find((b) => b.bankName === row.bankName)
                 return (
                   <div key={row.id} className="space-y-2">
-                    {/* Row: bank select + file picker + upload btn + remove btn */}
                     <div className="flex items-start gap-2">
                       <div className="flex-shrink-0 w-32">
                         <Select
@@ -457,24 +415,13 @@ function NewSessionPage() {
               {matchError && <ErrorMsg msg={matchError} />}
               {matchResult ? (
                 <div className="space-y-4">
-                  <MatchBlock label="REG — Jam Reguler" color="blue" stats={matchResult.reg} />
-                  {matchResult.ev && (
-                    <MatchBlock label="EV — Jam Event" color="purple" stats={matchResult.ev} />
-                  )}
-                  <Link href={`/sessions/${sessions.reg.id}/review`}>
+                  <MatchBlock label="Hasil Rekonsiliasi" color="blue" stats={matchResult} />
+                  <Link href={`/sessions/${session.id}/review`}>
                     <Button className="w-full gap-1.5">
                       <Eye className="w-4 h-4" />
-                      Lihat Review REG
+                      Lihat Review
                     </Button>
                   </Link>
-                  {matchResult.ev && (
-                    <Link href={`/sessions/${sessions.ev.id}/review`}>
-                      <Button variant="outline" className="w-full gap-1.5">
-                        <Eye className="w-4 h-4" />
-                        Lihat Review EV
-                      </Button>
-                    </Link>
-                  )}
                   <Button variant="outline" size="sm" className="w-full" onClick={reset}>
                     Mulai Sesi Baru
                   </Button>

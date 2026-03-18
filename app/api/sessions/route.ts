@@ -22,17 +22,10 @@ export const POST = withAuth(async (req: NextRequest) => {
 
   const date = new Date(sessionDate)
 
-  // Create REG and EV sessions simultaneously
-  const [regSession, evSession] = await Promise.all([
-    prisma.reconciliationSession.create({
-      data: { outletId, sessionDate: date, blockType: 'REG', status: 'uploading' },
-      include: { outlet: { select: { name: true, code: true } } },
-    }),
-    prisma.reconciliationSession.create({
-      data: { outletId, sessionDate: date, blockType: 'EV', status: 'uploading' },
-      include: { outlet: { select: { name: true, code: true } } },
-    }),
-  ])
+  const session = await prisma.reconciliationSession.create({
+    data: { outletId, sessionDate: date, status: 'uploading' },
+    include: { outlet: { select: { name: true, code: true } } },
+  })
 
-  return NextResponse.json({ reg: regSession, ev: evSession }, { status: 201 })
+  return NextResponse.json({ session }, { status: 201 })
 }, ['admin', 'finance'])
