@@ -11,6 +11,7 @@ export interface ParsedCashierEntry {
   notaBill: string | null
   entityNameRaw: string | null
   blockType: 'REG' | 'EV'   // auto-detected from "BLOK REG"/"BLOK EV" title row (v3 template)
+  sourceRow: number          // 1-based row number in the Excel sheet
 }
 
 export interface CashierParseResult {
@@ -93,7 +94,7 @@ export async function parseCashierFile(
       return
     }
 
-    entries.push({ terminalCode, bankName, terminalId, paymentType, amount, notaBill, entityNameRaw, blockType: currentBlock })
+    entries.push({ terminalCode, bankName, terminalId, paymentType, amount, notaBill, entityNameRaw, blockType: currentBlock, sourceRow: rowNum })
   })
 
   return { entries, skipped, errors, sheetFound: true }

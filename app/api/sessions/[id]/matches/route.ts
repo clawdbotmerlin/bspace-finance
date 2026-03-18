@@ -21,10 +21,11 @@ export const GET = withAuth(async (req: NextRequest) => {
       paymentType: true,
       amount: true,
       entityNameRaw: true,
+      sourceRow: true,
       matchStatus: true,
       matchedMutationId: true,
     },
-    orderBy: [{ bankName: 'asc' }, { paymentType: 'asc' }, { createdAt: 'asc' }],
+    orderBy: [{ bankName: 'asc' }, { terminalCode: 'asc' }, { paymentType: 'asc' }, { createdAt: 'asc' }],
   })
 
   // Batch fetch linked bank mutations for matched entries
