@@ -325,9 +325,9 @@ export default function ReviewPage() {
   const showUnexpected = tab === 'all' || tab === 'attention'
 
   // Bank groups
-  const banks = [...new Set(visibleEntries.map((e) => e.bankName))].sort()
+  const banks = Array.from(new Set(visibleEntries.map((e) => e.bankName))).sort()
   const unexpectedBanks = showUnexpected
-    ? [...new Set(unexpected.map((m) => m.bankName))].sort()
+    ? Array.from(new Set(unexpected.map((m) => m.bankName))).sort()
     : []
 
   const TABS: { id: ReviewTab; label: string; count: number }[] = [
