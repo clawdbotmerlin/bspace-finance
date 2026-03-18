@@ -192,10 +192,6 @@ function buildHtml(data: ReportData): string {
       <span class="info-value">${fmtDate(session.sessionDate)}</span>
     </div>
     <div class="info-item">
-      <span class="info-label">Blok</span>
-      <span class="info-value">${session.blockType}</span>
-    </div>
-    <div class="info-item">
       <span class="info-label">Total Entri Kasir</span>
       <span class="info-value">${session._count.cashierEntries}</span>
     </div>
@@ -355,7 +351,6 @@ function statusLabel(status: string): string {
 interface ReportSession {
   id: string
   sessionDate: string | Date
-  blockType: string
   status: string
   submittedAt: Date | null
   signedOffAt: Date | null
@@ -523,7 +518,7 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     const outletCode = session.outlet.code.replace(/[^a-zA-Z0-9]/g, '')
     const dateStr = new Date(session.sessionDate).toISOString().slice(0, 10)
-    const filename = `rekonsiliasi-${outletCode}-${dateStr}-${session.blockType}.pdf`
+    const filename = `rekonsiliasi-${outletCode}-${dateStr}.pdf`
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
