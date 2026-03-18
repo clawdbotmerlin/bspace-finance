@@ -1,30 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/guards'
 import { prisma } from '@/lib/db'
-import { Decimal } from '@prisma/client/runtime/library'
-
-interface MatchedEntry {
-  id: string
-  bankName: string
-  terminalCode: string | null
-  terminalId: string | null
-  paymentType: string
-  amount: Decimal
-  entityNameRaw: string | null
-  matchedMutationId: string | null
-}
-
-interface MutationRow {
-  id: string
-  bankName: string
-  accountNumber: string | null
-  grossAmount: Decimal
-  netAmount: Decimal | null
-  mdrAmount: Decimal | null
-  description: string | null
-  referenceNo: string | null
-  direction: string
-}
 
 export const GET = withAuth(async (req: NextRequest) => {
   const sessionId = req.nextUrl.pathname.split('/').at(-2)!
@@ -34,9 +10,9 @@ export const GET = withAuth(async (req: NextRequest) => {
   })
   if (!session) return NextResponse.json({ error: 'Sesi tidak ditemukan.' }, { status: 404 })
 
-  // Fetch matched cashier entries
-  const entries: MatchedEntry[] = await prisma.cashierEntry.findMany({
-    where: { sessionId, matchStatus: 'matched' },
+  // Fetch ALL cashier entries
+  const entries = await prisma.cashierEntry.findMany({
+    where: { sessionId },
     select: {
       id: true,
       bankName: true,
@@ -45,22 +21,24 @@ export const GET = withAuth(async (req: NextRequest) => {
       paymentType: true,
       amount: true,
       entityNameRaw: true,
+      matchStatus: true,
       matchedMutationId: true,
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: [{ bankName: 'asc' }, { paymentType: 'asc' }, { createdAt: 'asc' }],
   })
 
-  // Batch fetch linked bank mutations
-  const mutationIds = entries
-    .map((e: MatchedEntry) => e.matchedMutationId)
-    .filter((id: string | null): id is string => id !== null)
+  // Batch fetch linked bank mutations for matched entries
+  const matchedMutationIds = entries
+    .filter((e) => e.matchedMutationId !== null)
+    .map((e) => e.matchedMutationId!)
 
-  const mutations: MutationRow[] = await prisma.bankMutation.findMany({
-    where: { id: { in: mutationIds } },
+  const matchedMutations = await prisma.bankMutation.findMany({
+    where: { id: { in: matchedMutationIds } },
     select: {
       id: true,
       bankName: true,
       accountNumber: true,
+      transactionDate: true,
       grossAmount: true,
       netAmount: true,
       mdrAmount: true,
@@ -70,21 +48,50 @@ export const GET = withAuth(async (req: NextRequest) => {
     },
   })
 
-  const mutMap = new Map<string, MutationRow>(mutations.map((m: MutationRow) => [m.id, m]))
+  const mutMap = new Map(matchedMutations.map((m) => [m.id, m]))
 
-  const pairs = entries.map((e: MatchedEntry) => {
-    const mut = e.matchedMutationId ? mutMap.get(e.matchedMutationId) ?? null : null
-    return {
-      cashierEntry: e,
-      bankMutation: mut,
-      amountDiff: mut ? Number(mut.grossAmount) - Number(e.amount) : 0,
-    }
+  // Unmatched bank mutations = unexpected entries (CR direction only, exclude DR)
+  const unexpectedMutations = await prisma.bankMutation.findMany({
+    where: { sessionId, matchStatus: 'unmatched', direction: 'CR' },
+    select: {
+      id: true,
+      bankName: true,
+      accountNumber: true,
+      transactionDate: true,
+      grossAmount: true,
+      description: true,
+      referenceNo: true,
+      direction: true,
+      matchStatus: true,
+    },
+    orderBy: [{ bankName: 'asc' }, { transactionDate: 'asc' }],
   })
 
-  // Count zero-amount entries for summary
-  const zeroCount = await prisma.cashierEntry.count({
-    where: { sessionId, matchStatus: 'zero' },
-  })
+  // Build entries with their linked mutation
+  const entriesWithMutation = entries.map((e) => ({
+    ...e,
+    bankMutation: e.matchedMutationId ? (mutMap.get(e.matchedMutationId) ?? null) : null,
+  }))
 
-  return NextResponse.json({ pairs, zeroCount })
+  // Rp summary totals
+  const cashierTotal = entries.reduce((sum, e) => sum + Number(e.amount), 0)
+  const matchedAmount = entries
+    .filter((e) => e.matchStatus === 'matched')
+    .reduce((sum, e) => sum + Number(e.amount), 0)
+  const unmatchedAmount = entries
+    .filter((e) => e.matchStatus === 'unmatched')
+    .reduce((sum, e) => sum + Number(e.amount), 0)
+  const zeroCount = entries.filter((e) => e.matchStatus === 'zero').length
+
+  return NextResponse.json({
+    entries: entriesWithMutation,
+    unexpectedMutations,
+    summary: {
+      cashierTotal,
+      matchedAmount,
+      unmatchedAmount,
+      zeroCount,
+      unexpectedCount: unexpectedMutations.length,
+    },
+  })
 }, ['admin', 'finance', 'manager'])
