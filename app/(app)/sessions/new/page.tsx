@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Upload, CheckCircle2, AlertCircle, ArrowLeft, FileSpreadsheet,
-  Loader2, Eye, Sparkles, Plus, X,
+  Loader2, Eye, Plus, X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,23 +53,15 @@ interface UploadedBank {
   count: number
 }
 
-interface SuggestState {
-  status: 'idle' | 'analyzing' | 'ready' | 'saving' | 'saved'
-  configId: string | null
-  editedJson: string
-  error: string
-}
-
 interface BankUploadRow {
   id: string
   bankName: string
-  file: File | null
+  files: File[]
   uploading: boolean
   error: string
-  suggest: SuggestState | null
 }
 
-export default function NewSessionPage() {
+function NewSessionPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [outlets, setOutlets] = useState<Outlet[]>([])
   const [bankConfigs, setBankConfigs] = useState<BankConfig[]>([])
@@ -84,10 +77,12 @@ export default function NewSessionPage() {
   const [cashierResult, setCashierResult] = useState<CashierResult | null>(null)
   const [cashierError, setCashierError] = useState('')
 
+  const searchParams = useSearchParams()
+
   // Step 3 – bank mutation uploads (multi-row)
   const emptyRow = (): BankUploadRow => ({
     id: String(Date.now() + Math.random()),
-    bankName: '', file: null, uploading: false, error: '', suggest: null,
+    bankName: '', files: [], uploading: false, error: '',
   })
   const [bankRows, setBankRows] = useState<BankUploadRow[]>([emptyRow()])
   const [uploadedBanks, setUploadedBanks] = useState<UploadedBank[]>([])
@@ -101,6 +96,33 @@ export default function NewSessionPage() {
     fetch('/api/outlets').then((r) => r.json()).then(setOutlets)
     fetch('/api/bank-configs').then((r) => r.json()).then(setBankConfigs)
   }, [])
+
+  // Resume an in-progress session from history
+  useEffect(() => {
+    const resumeId = searchParams.get('resumeId')
+    if (!resumeId) return
+    async function loadResume() {
+      const [detailRes, allRes] = await Promise.all([
+        fetch(`/api/sessions/${resumeId}`),
+        fetch('/api/sessions'),
+      ])
+      if (!detailRes.ok) return
+      const detail = await detailRes.json()
+      const all: Array<Session & { _count: { cashierEntries: number; bankMutations: number } }> = await allRes.json()
+      const pair = all.find((s) =>
+        s.outletId === detail.outletId &&
+        s.sessionDate === detail.sessionDate &&
+        s.blockType !== detail.blockType
+      )
+      if (!pair) return
+      const reg = detail.blockType === 'REG' ? detail : pair
+      const ev  = detail.blockType === 'EV'  ? detail : pair
+      setSessions({ reg, ev })
+      const hasCashier = (detail._count?.cashierEntries ?? 0) > 0 || (pair._count?.cashierEntries ?? 0) > 0
+      setStep(hasCashier ? 3 : 2)
+    }
+    loadResume()
+  }, [searchParams])
 
   async function handleCreateSession(e: React.FormEvent) {
     e.preventDefault()
@@ -141,72 +163,31 @@ export default function NewSessionPage() {
     setBankRows((prev) => prev.map((r) => r.id === id ? { ...r, ...patch } : r))
   }
 
-  function patchSuggest(id: string, patch: Partial<SuggestState>) {
-    setBankRows((prev) => prev.map((r) =>
-      r.id === id && r.suggest ? { ...r, suggest: { ...r.suggest, ...patch } } : r
-    ))
-  }
-
   async function doUploadBankRow(id: string) {
     const row = bankRows.find((r) => r.id === id)
-    if (!row || !row.file || !row.bankName || !sessions) return
+    if (!row || !row.files.length || !row.bankName || !sessions) return
     updateRow(id, { uploading: true, error: '' })
-    const fd = new FormData(); fd.append('file', row.file); fd.append('bankName', row.bankName)
-    const res = await fetch(`/api/sessions/${sessions.reg.id}/upload/bankmutation`, { method: 'POST', body: fd })
+    let totalParsed = 0
+    for (let i = 0; i < row.files.length; i++) {
+      const fd = new FormData()
+      fd.append('file', row.files[i])
+      fd.append('bankName', row.bankName)
+      if (i > 0) fd.append('append', 'true')
+      const res = await fetch(`/api/sessions/${sessions.reg.id}/upload/bankmutation`, { method: 'POST', body: fd })
+      if (!res.ok) {
+        const d = await res.json()
+        updateRow(id, { uploading: false, error: d.error ?? 'Gagal mengupload file.' })
+        return
+      }
+      const data = await res.json()
+      totalParsed += data.parsed
+    }
     updateRow(id, { uploading: false })
-    if (res.ok) {
-      const data = await res.json()
-      setUploadedBanks((prev) => {
-        const existing = prev.find((b) => b.bankName === row.bankName)
-        if (existing) return prev.map((b) => b.bankName === row.bankName ? { ...b, count: data.parsed } : b)
-        return [...prev, { bankName: row.bankName, count: data.parsed }]
-      })
-      updateRow(id, {
-        suggest: data.parsed === 0
-          ? { status: 'idle', configId: null, editedJson: '', error: '' }
-          : null,
-      })
-    } else {
-      const d = await res.json()
-      updateRow(id, { error: d.error ?? 'Gagal mengupload file.' })
-    }
-  }
-
-  async function handleAnalyzeConfigRow(id: string) {
-    const row = bankRows.find((r) => r.id === id)
-    if (!row || !row.file || !row.bankName || !sessions) return
-    patchSuggest(id, { status: 'analyzing', error: '' })
-    const fd = new FormData(); fd.append('file', row.file); fd.append('bankName', row.bankName)
-    const res = await fetch(`/api/sessions/${sessions.reg.id}/suggest-bank-config`, { method: 'POST', body: fd })
-    if (res.ok) {
-      const data = await res.json()
-      patchSuggest(id, { status: 'ready', configId: data.configId, editedJson: JSON.stringify(data.suggestion, null, 2) })
-    } else {
-      const d = await res.json()
-      patchSuggest(id, { status: 'idle', error: d.error ?? 'Gagal menganalisis file.' })
-    }
-  }
-
-  async function handleSaveConfigRow(id: string) {
-    const row = bankRows.find((r) => r.id === id)
-    if (!row?.suggest?.configId || !row.suggest.editedJson) return
-    patchSuggest(id, { status: 'saving', error: '' })
-    let parsed: unknown
-    try { parsed = JSON.parse(row.suggest.editedJson) } catch {
-      patchSuggest(id, { status: 'ready', error: 'JSON tidak valid. Periksa kembali.' })
-      return
-    }
-    const res = await fetch(`/api/bank-configs/${row.suggest.configId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(parsed),
+    setUploadedBanks((prev) => {
+      const existing = prev.find((b) => b.bankName === row.bankName)
+      if (existing) return prev.map((b) => b.bankName === row.bankName ? { ...b, count: totalParsed } : b)
+      return [...prev, { bankName: row.bankName, count: totalParsed }]
     })
-    if (res.ok) {
-      patchSuggest(id, { status: 'saved' })
-    } else {
-      const d = await res.json()
-      patchSuggest(id, { status: 'ready', error: d.error ?? 'Gagal menyimpan konfigurasi.' })
-    }
   }
 
   async function handleRunMatching() {
@@ -242,6 +223,8 @@ export default function NewSessionPage() {
     setBankRows([emptyRow()]); setUploadedBanks([])
     setCreateError(''); setOutletId(''); setSessionDate('')
     setMatchResult(null); setMatchError('')
+    // Clear resumeId from URL without reload
+    window.history.replaceState({}, '', '/sessions/new')
   }
 
   const sessionBadges = sessions && (
@@ -368,16 +351,14 @@ export default function NewSessionPage() {
             <div className="space-y-3">
               {bankRows.map((row, idx) => {
                 const uploaded = uploadedBanks.find((b) => b.bankName === row.bankName)
-                const isDone = uploaded && !row.suggest
                 return (
                   <div key={row.id} className="space-y-2">
-                    {/* Row: bank select + file + upload btn + remove btn */}
+                    {/* Row: bank select + file picker + upload btn + remove btn */}
                     <div className="flex items-start gap-2">
                       <div className="flex-shrink-0 w-32">
                         <Select
                           value={row.bankName}
-                          onValueChange={(v) => updateRow(row.id, { bankName: v, suggest: null })}
-                          disabled={!!isDone}
+                          onValueChange={(v) => updateRow(row.id, { bankName: v })}
                         >
                           <SelectTrigger className="h-9 text-sm">
                             <SelectValue placeholder="Bank..." />
@@ -391,42 +372,45 @@ export default function NewSessionPage() {
                       </div>
                       <label className={cn(
                         'flex items-center gap-2 flex-1 min-w-0 border rounded-lg px-3 h-9 cursor-pointer transition-colors text-sm',
-                        isDone ? 'border-green-300 bg-green-50' :
-                        row.file ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300',
+                        uploaded ? 'border-green-300 bg-green-50' :
+                        row.files.length ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300',
                       )}>
-                        {isDone
+                        {uploaded
                           ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
                           : <FileSpreadsheet className="w-4 h-4 text-slate-400 shrink-0" />}
                         <span className={cn(
                           'truncate',
-                          isDone ? 'text-green-700' : row.file ? 'text-blue-700 font-medium' : 'text-slate-400',
+                          uploaded ? 'text-green-700' : row.files.length ? 'text-blue-700 font-medium' : 'text-slate-400',
                         )}>
-                          {isDone
-                            ? `${uploaded!.count} mutasi`
-                            : row.file ? row.file.name : 'Pilih file (.xlsx/.xls/.csv)'}
+                          {uploaded
+                            ? `${uploaded.count} mutasi (${row.files.length || '?'} file)`
+                            : row.files.length === 1
+                              ? row.files[0].name
+                              : row.files.length > 1
+                                ? `${row.files.length} file dipilih`
+                                : 'Pilih satu atau lebih file (.xlsx/.xls/.csv)'}
                         </span>
-                        {!isDone && (
-                          <input
-                            type="file"
-                            accept=".xlsx,.xls,.csv"
-                            className="hidden"
-                            onChange={(e) => updateRow(row.id, { file: e.target.files?.[0] ?? null, error: '', suggest: null })}
-                          />
-                        )}
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls,.csv"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => updateRow(row.id, { files: Array.from(e.target.files ?? []), error: '' })}
+                        />
                       </label>
                       <Button
                         type="button"
                         size="sm"
-                        disabled={!row.file || !row.bankName || row.uploading || !!isDone}
+                        disabled={!row.files.length || !row.bankName || row.uploading}
                         onClick={() => doUploadBankRow(row.id)}
                         className="h-9 shrink-0 gap-1.5"
                       >
                         {row.uploading
                           ? <Loader2 className="w-4 h-4 animate-spin" />
                           : <Upload className="w-4 h-4" />}
-                        {row.uploading ? 'Upload...' : isDone ? 'Terupload' : 'Upload'}
+                        {row.uploading ? 'Upload...' : 'Upload'}
                       </Button>
-                      {bankRows.length > 1 && !isDone && (
+                      {bankRows.length > 1 && (
                         <Button
                           type="button"
                           variant="ghost"
@@ -440,77 +424,6 @@ export default function NewSessionPage() {
                     </div>
 
                     {row.error && <ErrorMsg msg={row.error} />}
-
-                    {/* AI Suggest card — appears when 0 mutations parsed */}
-                    {row.suggest && row.file && row.bankName && (
-                      <div className="ml-0 rounded-lg border border-amber-200 bg-amber-50/60 p-4 space-y-3">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-slate-700">
-                              0 mutasi terdeteksi untuk {row.bankName}
-                            </p>
-                            <p className="text-xs text-slate-500 mt-0.5">
-                              Format file mungkin berbeda. AI dapat menganalisis dan menyarankan konfigurasi kolom.
-                            </p>
-                          </div>
-                        </div>
-
-                        {row.suggest.status === 'idle' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleAnalyzeConfigRow(row.id)}
-                            className="gap-2 border-amber-300 hover:bg-amber-100"
-                          >
-                            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                            Analisis Format dengan AI
-                          </Button>
-                        )}
-
-                        {row.suggest.status === 'analyzing' && (
-                          <div className="flex items-center gap-2 text-sm text-slate-500">
-                            <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
-                            Menganalisis dengan AI...
-                          </div>
-                        )}
-
-                        {(row.suggest.status === 'ready' || row.suggest.status === 'saving' || row.suggest.status === 'saved') && (
-                          <div className="space-y-2">
-                            <Label className="text-xs text-slate-500">Konfigurasi Disarankan AI — edit jika perlu</Label>
-                            <textarea
-                              className="w-full font-mono text-xs border border-slate-200 rounded-lg p-3 bg-white resize-y min-h-[160px] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              value={row.suggest.editedJson}
-                              onChange={(e) => patchSuggest(row.id, { editedJson: e.target.value })}
-                              disabled={row.suggest.status !== 'ready'}
-                              spellCheck={false}
-                            />
-                            {row.suggest.status === 'saved' ? (
-                              <div className="flex items-center gap-2">
-                                <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                                <span className="text-sm text-green-700 flex-1">Konfigurasi disimpan.</span>
-                                <Button size="sm" onClick={() => doUploadBankRow(row.id)} disabled={row.uploading} className="gap-1.5">
-                                  <Upload className="w-3 h-3" />
-                                  {row.uploading ? 'Mengupload...' : 'Coba Ulang'}
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button
-                                size="sm"
-                                onClick={() => handleSaveConfigRow(row.id)}
-                                disabled={row.suggest.status === 'saving'}
-                                className="gap-1.5"
-                              >
-                                {row.suggest.status === 'saving'
-                                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Menyimpan...</>
-                                  : 'Simpan Konfigurasi'}
-                              </Button>
-                            )}
-                            {row.suggest.error && <ErrorMsg msg={row.suggest.error} />}
-                          </div>
-                        )}
-                      </div>
-                    )}
 
                     {idx < bankRows.length - 1 && <div className="border-t border-slate-100" />}
                   </div>
@@ -578,6 +491,14 @@ export default function NewSessionPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <NewSessionPage />
+    </Suspense>
   )
 }
 

@@ -22,24 +22,6 @@ export const POST = withAuth(async (req: NextRequest) => {
 
   const date = new Date(sessionDate)
 
-  // Check whether sessions already exist for this outlet + date
-  const [existingReg, existingEv] = await Promise.all([
-    prisma.reconciliationSession.findUnique({
-      where: { outletId_sessionDate_blockType: { outletId, sessionDate: date, blockType: 'REG' } },
-    }),
-    prisma.reconciliationSession.findUnique({
-      where: { outletId_sessionDate_blockType: { outletId, sessionDate: date, blockType: 'EV' } },
-    }),
-  ])
-
-  if (existingReg || existingEv) {
-    return NextResponse.json({
-      error: 'Sesi untuk outlet dan tanggal ini sudah ada.',
-      existingRegId: existingReg?.id ?? null,
-      existingEvId:  existingEv?.id  ?? null,
-    }, { status: 409 })
-  }
-
   // Create REG and EV sessions simultaneously
   const [regSession, evSession] = await Promise.all([
     prisma.reconciliationSession.create({

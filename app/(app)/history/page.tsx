@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import {
   History, Loader2, AlertCircle, Eye, ClipboardCheck,
-  Search, X, ChevronUp, ChevronDown,
+  Search, X, ChevronUp, ChevronDown, ArrowRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -58,6 +58,15 @@ function statusBadge(status: string) {
 }
 
 function ActionCell({ s }: { s: SessionRow }) {
+  if (s.status === 'uploading') {
+    return (
+      <Link href={`/sessions/new?resumeId=${s.id}`}>
+        <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
+          <ArrowRight className="w-3 h-3" /> Lanjutkan
+        </Button>
+      </Link>
+    )
+  }
   if (s.status === 'reviewing') {
     return (
       <Link href={`/sessions/${s.id}/review`}>
@@ -157,6 +166,7 @@ export default function HistoryPage() {
   const hasFilters = !!(searchOutlet || filterStatus || filterBlock)
 
   const counts = useMemo(() => ({
+    uploading: sessions.filter((s: SessionRow) => s.status === 'uploading').length,
     reviewing: sessions.filter((s: SessionRow) => s.status === 'reviewing').length,
     pending_signoff: sessions.filter((s: SessionRow) => s.status === 'pending_signoff').length,
     signed_off: sessions.filter((s: SessionRow) => s.status === 'signed_off').length,
@@ -184,6 +194,7 @@ export default function HistoryPage() {
       {!loading && !error && sessions.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
           {[
+            { value: 'uploading', dot: 'bg-slate-400', label: 'Dalam Proses', count: counts.uploading, active: 'bg-slate-100 border-slate-300 text-slate-700' },
             { value: 'reviewing', dot: 'bg-amber-400', label: 'Review', count: counts.reviewing, active: 'bg-amber-100 border-amber-300 text-amber-700' },
             { value: 'pending_signoff', dot: 'bg-blue-400', label: 'Menunggu TTD', count: counts.pending_signoff, active: 'bg-blue-100 border-blue-300 text-blue-700' },
             { value: 'signed_off', dot: 'bg-emerald-400', label: 'Selesai', count: counts.signed_off, active: 'bg-emerald-100 border-emerald-300 text-emerald-700' },

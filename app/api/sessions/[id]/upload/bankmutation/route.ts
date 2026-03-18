@@ -18,6 +18,8 @@ export const POST = withAuth(async (req: NextRequest) => {
   if (!file) return NextResponse.json({ error: 'File tidak ditemukan dalam request.' }, { status: 400 })
   if (!bankName) return NextResponse.json({ error: 'bankName wajib diisi.' }, { status: 400 })
 
+  const appendMode = formData.get('append') === 'true'
+
   const dbConfig = await prisma.bankColumnConfig.findUnique({ where: { bankName } })
   if (!dbConfig) {
     return NextResponse.json({ error: `Konfigurasi untuk bank "${bankName}" belum tersedia.` }, { status: 400 })
@@ -51,10 +53,12 @@ export const POST = withAuth(async (req: NextRequest) => {
     ? (await prisma.cashierEntry.count({ where: { sessionId: pairedSession.id } })) > 0
     : false
 
-  // Re-upload for the same bank replaces existing mutations for that bank
-  await prisma.bankMutation.deleteMany({ where: { sessionId, bankName } })
-  if (pairedSession && pairedHasEntries) {
-    await prisma.bankMutation.deleteMany({ where: { sessionId: pairedSession.id, bankName } })
+  // Re-upload for the same bank replaces existing mutations (unless append mode for multi-file)
+  if (!appendMode) {
+    await prisma.bankMutation.deleteMany({ where: { sessionId, bankName } })
+    if (pairedSession && pairedHasEntries) {
+      await prisma.bankMutation.deleteMany({ where: { sessionId: pairedSession.id, bankName } })
+    }
   }
 
   if (result.mutations.length > 0) {
