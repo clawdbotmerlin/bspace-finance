@@ -10,7 +10,7 @@ export interface ParsedCashierEntry {
   amount: number
   notaBill: string | null
   entityNameRaw: string | null
-  blockType: 'REG' | 'EV'   // auto-detected from "BLOK REG"/"BLOK EV" title row (v3 template)
+  blockType: 'REG' | 'EV'   // auto-detected from title row containing "(REG)"/"(EV)" or "BLOK REG"/"BLOK EV"
   sourceRow: number          // 1-based row number in the Excel sheet
 }
 
@@ -35,6 +35,63 @@ function cellNum(value: ExcelJS.CellValue): number {
   return isNaN(n) ? 0 : n
 }
 
+// Column map resolved from the header row of each block section
+interface ColMap {
+  totalCol: number      // column index of "TOTAL"
+  entityCol: number     // column index of entity/remaks name
+  notaBillCol: number   // column index of "NOTA BILL"
+}
+
+function detectColMap(cells: (ExcelJS.CellValue | null)[]): ColMap | null {
+  // Look for the header row that contains "NAMA BANK" — scan all cells for known labels
+  let hasNamaBank = false
+  let totalCol = -1
+  let entityCol = -1
+  let notaBillCol = -1
+
+  for (let i = 0; i < cells.length; i++) {
+    const s = cellStr(cells[i]).toUpperCase()
+    if (s === 'NAMA BANK') hasNamaBank = true
+    if (s === 'TOTAL') totalCol = i
+    if (s === 'NOTA BILL') notaBillCol = i
+    // Entity/Remarks column may be labeled REMAKS, REMAKES, ENTITAS, ENTITY
+    if (['REMAKS', 'REMAKES', 'ENTITAS', 'ENTITY', 'KETERANGAN'].includes(s)) entityCol = i
+  }
+
+  if (!hasNamaBank || totalCol === -1) return null
+
+  return {
+    totalCol,
+    entityCol,
+    notaBillCol,
+  }
+}
+
+// Known bank labels — first token of col B must be one of these to be treated as a bank entry
+const KNOWN_BANKS = new Set([
+  'BCA', 'BNI', 'BRI', 'MANDIRI', 'PERMATA', 'CIMB', 'DANAMON',
+  'BTN', 'OCBC', 'MAYBANK', 'PANIN', 'MEGA', 'BUKOPIN', 'BSI',
+])
+
+// Check if the value in col B is the bank string ("BCA C2AP2381") vs a continuation
+// row where the terminal code is repeated (e.g. "2995", "7-8774", "22 87").
+// Returns null for continuation rows — caller keeps the last bankName/terminalId.
+function parseBankCol(colB: string, colA: string): { bankName: string; terminalId: string | null } | null {
+  if (!colB) return null
+
+  // Continuation: col B is the same value as col A (terminal code repeated)
+  if (colB.trim() === colA.trim()) return null
+
+  const spaceIdx = colB.indexOf(' ')
+  const firstToken = (spaceIdx > 0 ? colB.slice(0, spaceIdx) : colB).toUpperCase().trim()
+
+  // First token must be a recognised bank label
+  if (!KNOWN_BANKS.has(firstToken)) return null
+
+  const terminalId = spaceIdx > 0 ? colB.slice(spaceIdx + 1).trim() || null : null
+  return { bankName: firstToken, terminalId }
+}
+
 export async function parseCashierFile(
   buffer: ArrayBuffer,
   sessionDate: Date,
@@ -52,49 +109,96 @@ export async function parseCashierFile(
   const entries: ParsedCashierEntry[] = []
   const errors: string[] = []
   let skipped = 0
-  // Track whichever section we're currently inside (null = before first header)
+
+  // State machine
   let currentBlock: 'REG' | 'EV' | null = null
+  let colMap: ColMap | null = null
+  let lastBankName = ''
+  let lastTerminalId: string | null = null
 
   sheet.eachRow((row, rowNum) => {
     const rowValues = row.values as ExcelJS.CellValue[]
     // row.values is 1-indexed; shift to 0-indexed
-    const cells = Array.from({ length: 20 }, (_, i) => rowValues[i + 1] ?? null)
+    const cells = Array.from({ length: 25 }, (_, i) => rowValues[i + 1] ?? null)
     const rowText = cells.map(cellStr).join(' ').toUpperCase()
 
-    // Detect section title rows (v3 format: "BLOK REG" / "BLOK EV" in col A title row)
-    // switch active block and skip the title/header rows themselves
-    if (rowText.includes('BLOK REG')) { currentBlock = 'REG'; return }
-    if (rowText.includes('BLOK EV'))  { currentBlock = 'EV';  return }
+    // ── Block title detection ────────────────────────────────────────────────
+    // Handles both v3 template "BLOK REG"/"BLOK EV" and actual file "(REG)"/"(EV)"
+    const isRegTitle = rowText.includes('BLOK REG') || /\(\s*REG\s*\)/.test(rowText)
+    const isEvTitle  = rowText.includes('BLOK EV')  || /\(\s*EV\s*\)/.test(rowText)
 
-    // Skip rows that precede any section header
+    if (isRegTitle && !isEvTitle) {
+      currentBlock = 'REG'
+      colMap = null                // reset; next header row will set it
+      lastBankName = ''
+      lastTerminalId = null
+      return
+    }
+    if (isEvTitle) {
+      currentBlock = 'EV'
+      colMap = null
+      lastBankName = ''
+      lastTerminalId = null
+      return
+    }
+
+    // Skip rows before any block header
     if (!currentBlock) return
 
-    // Col C (index 2) = JENIS — payment type filter also skips header/summary rows naturally
+    // ── Column header row detection ──────────────────────────────────────────
+    if (!colMap) {
+      const detected = detectColMap(cells)
+      if (detected) {
+        colMap = detected
+      }
+      // Header row itself is not a data row — skip regardless
+      skipped++
+      return
+    }
+
+    // ── Data row filter ──────────────────────────────────────────────────────
     const paymentType = cellStr(cells[2]).toUpperCase()
     if (!VALID_PAYMENT_TYPES.has(paymentType)) {
       skipped++
       return
     }
 
-    // Col A (0): KODE EDC   Col B (1): NAMA BANK / TERMINAL  Col C (2): JENIS
-    // Col D (3): ENTITAS    Col K (10): TOTAL (=SUM of POS cols) Col L (11): NOTA BILL
-    const bankRaw = cellStr(cells[1])
-    const spaceIdx = bankRaw.indexOf(' ')
-    const bankName = spaceIdx > 0 ? bankRaw.slice(0, spaceIdx).toUpperCase() : bankRaw.toUpperCase()
-    const terminalId = spaceIdx > 0 ? bankRaw.slice(spaceIdx + 1).trim() || null : null
+    // ── Bank name resolution ─────────────────────────────────────────────────
+    // Col A (0): KODE EDC   Col B (1): NAMA BANK / TERMINAL (may be repeated code on continuation rows)
+    const colAStr = cellStr(cells[0])
+    const colBStr = cellStr(cells[1])
 
-    const terminalCode  = cellStr(cells[0])  || null
-    const amount        = cellNum(cells[10])           // col K — TOTAL (sum of all POS columns)
-    const entityNameRaw = cellStr(cells[3])  || null   // col D — ENTITAS
-    const notaBill      = cellStr(cells[11]) || null   // col L — NOTA BILL
+    const parsed = parseBankCol(colBStr, colAStr)
+    if (parsed) {
+      lastBankName   = parsed.bankName
+      lastTerminalId = parsed.terminalId
+    }
+    // else: continuation row — keep lastBankName / lastTerminalId
 
-    if (!bankName && !terminalCode) {
+    const terminalCode = colAStr || null
+
+    if (!lastBankName && !terminalCode) {
       errors.push(`Baris ${rowNum}: NAMA BANK dan kode terminal kosong, dilewati.`)
       skipped++
       return
     }
 
-    entries.push({ terminalCode, bankName, terminalId, paymentType, amount, notaBill, entityNameRaw, blockType: currentBlock, sourceRow: rowNum })
+    // ── Amount & meta fields ─────────────────────────────────────────────────
+    const amount        = cellNum(cells[colMap.totalCol])
+    const entityNameRaw = colMap.entityCol >= 0 ? (cellStr(cells[colMap.entityCol]) || null) : null
+    const notaBill      = colMap.notaBillCol >= 0 ? (cellStr(cells[colMap.notaBillCol]) || null) : null
+
+    entries.push({
+      terminalCode,
+      bankName: lastBankName,
+      terminalId: lastTerminalId,
+      paymentType,
+      amount,
+      notaBill,
+      entityNameRaw,
+      blockType: currentBlock!,
+      sourceRow: rowNum,
+    })
   })
 
   return { entries, skipped, errors, sheetFound: true }
