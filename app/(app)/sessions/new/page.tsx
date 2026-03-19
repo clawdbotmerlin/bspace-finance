@@ -108,19 +108,33 @@ function NewSessionPage() {
     e.preventDefault()
     setCreateError('')
     setCreating(true)
-    const res = await fetch('/api/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ outletId, sessionDate }),
-    })
-    setCreating(false)
-    if (res.ok) {
-      const data = await res.json()
-      setSession(data.session)
-      setStep(2)
-    } else {
-      const d = await res.json()
-      setCreateError(d.error ?? 'Gagal membuat sesi.')
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outletId, sessionDate }),
+      })
+      setCreating(false)
+      if (res.ok) {
+        const data = await res.json()
+        setSession(data.session)
+        setStep(2)
+      } else if (res.status === 409) {
+        const d = await res.json()
+        const resumeId = d.existingSessionId
+        if (resumeId) {
+          // Navigate to resume the existing session
+          window.location.href = `/sessions/new?resumeId=${resumeId}`
+        } else {
+          setCreateError(d.error ?? 'Sesi sudah ada untuk outlet dan tanggal ini.')
+        }
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setCreateError((d as { error?: string }).error ?? 'Gagal membuat sesi.')
+      }
+    } catch {
+      setCreating(false)
+      setCreateError('Gagal membuat sesi. Periksa koneksi Anda.')
     }
   }
 

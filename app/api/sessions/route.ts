@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/guards'
 import { prisma } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 
 export const GET = withAuth(async () => {
   const sessions = await prisma.reconciliationSession.findMany({
@@ -22,10 +23,24 @@ export const POST = withAuth(async (req: NextRequest) => {
 
   const date = new Date(sessionDate)
 
-  const session = await prisma.reconciliationSession.create({
-    data: { outletId, sessionDate: date, status: 'uploading' },
-    include: { outlet: { select: { name: true, code: true } } },
-  })
-
-  return NextResponse.json({ session }, { status: 201 })
+  try {
+    const session = await prisma.reconciliationSession.create({
+      data: { outletId, sessionDate: date, status: 'uploading' },
+      include: { outlet: { select: { name: true, code: true } } },
+    })
+    return NextResponse.json({ session }, { status: 201 })
+  } catch (err) {
+    // Unique constraint violation — session already exists for this outlet+date
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      const existing = await prisma.reconciliationSession.findUnique({
+        where: { outletId_sessionDate: { outletId, sessionDate: date } },
+        include: { outlet: { select: { name: true, code: true } } },
+      })
+      return NextResponse.json(
+        { error: 'Sesi sudah ada untuk outlet dan tanggal ini.', existingSessionId: existing?.id ?? null },
+        { status: 409 },
+      )
+    }
+    throw err
+  }
 }, ['admin', 'finance'])
