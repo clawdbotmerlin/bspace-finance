@@ -592,7 +592,7 @@ function EntryRow({
       isLast && 'border-0',
       isUnmatched && 'bg-red-50/40',
       isMismatch && 'bg-amber-50/40',
-      isZero && 'opacity-55',
+      isZero && 'bg-slate-50/60',
       isSecondOrLater && 'bg-blue-50/20',
     )}>
       {/* Type badge */}
@@ -603,15 +603,21 @@ function EntryRow({
         )}
       </div>
 
-      {/* Cashier side */}
+      {/* Cashier side — always show all data from file */}
       <div className="min-w-0">
         <div className="flex items-baseline gap-1.5">
-          <span className="font-mono font-semibold text-slate-800 tabular-nums">
+          <span className={cn('font-mono font-semibold tabular-nums', isZero ? 'text-slate-400' : 'text-slate-800')}>
             {formatRupiah(entry.amount)}
           </span>
         </div>
         {entry.terminalId && (
           <p className="text-[11px] text-slate-500 font-mono mt-0.5">{entry.terminalId}</p>
+        )}
+        {entry.entityNameRaw && (
+          <p className="text-[11px] text-slate-600 mt-0.5 flex items-center gap-1">
+            <span className="text-[9px] text-slate-400 uppercase font-semibold tracking-wide">kasir</span>
+            {entry.entityNameRaw}
+          </p>
         )}
         {entry.notaBill && (
           <p className="text-[10px] text-slate-400 font-mono mt-0.5">nota: {entry.notaBill}</p>
@@ -638,7 +644,7 @@ function EntryRow({
             : <span className="text-slate-300 text-xs">⇄</span>}
       </div>
 
-      {/* Bank side */}
+      {/* Bank side — only render when a bank mutation is actually linked */}
       <div className="min-w-0">
         {entry.bankMutation ? (
           <>
@@ -658,7 +664,7 @@ function EntryRow({
               </span>
               {settlementBadge(entry.bankMutation.transactionDate, sessionDate)}
               {isBatched && isSecondOrLater && (
-                <span className="text-[10px] text-blue-600 font-medium">Baris bank sama (Rp {formatRupiah(entry.bankMutation.grossAmount)})</span>
+                <span className="text-[10px] text-blue-600 font-medium">Baris bank sama ({formatRupiah(entry.bankMutation.grossAmount)})</span>
               )}
             </div>
             {entry.bankMutation.description && (
@@ -673,14 +679,7 @@ function EntryRow({
               <p className="text-[11px] text-slate-400 font-mono mt-0.5">{entry.bankMutation.referenceNo}</p>
             )}
           </>
-        ) : isZero ? (
-          <span className="text-[11px] text-slate-400 italic">Rp 0 — tidak perlu entri bank</span>
-        ) : (
-          <div>
-            <p className="text-[11px] text-red-600 font-semibold">Tidak ada kredit ditemukan</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">T+0, T+1, T+2 sudah dicek</p>
-          </div>
-        )}
+        ) : null}
       </div>
 
       {/* Status + action */}
