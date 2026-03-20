@@ -31,6 +31,12 @@ function cellStr(value: ExcelJS.CellValue): string {
 
 function cellNum(value: ExcelJS.CellValue): number {
   if (value == null) return 0
+  // Formula cells arrive as { formula: '...', result: <value> } — extract the result
+  if (typeof value === 'object' && value !== null && 'result' in (value as object)) {
+    const r = (value as { result: unknown }).result
+    if (typeof r === 'number') return isNaN(r) ? 0 : r
+    value = r as ExcelJS.CellValue
+  }
   const n = typeof value === 'number' ? value : parseFloat(String(value).replace(/[^0-9.-]/g, ''))
   return isNaN(n) ? 0 : n
 }
