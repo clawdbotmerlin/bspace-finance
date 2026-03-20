@@ -10,7 +10,7 @@ export interface ParsedCashierEntry {
   amount: number
   notaBill: string | null
   entityNameRaw: string | null
-  blockType: 'REG' | 'EV'   // auto-detected from title row containing "(REG)"/"(EV)" or "BLOK REG"/"BLOK EV"
+  blockType: 'REG' | 'EV'   // auto-detected from section header
   sourceRow: number          // 1-based row number in the Excel sheet
 }
 
@@ -37,13 +37,12 @@ function cellNum(value: ExcelJS.CellValue): number {
 
 // Column map resolved from the header row of each block section
 interface ColMap {
-  totalCol: number      // column index of "TOTAL"
-  entityCol: number     // column index of entity/remaks name
-  notaBillCol: number   // column index of "NOTA BILL"
+  totalCol: number
+  entityCol: number
+  notaBillCol: number
 }
 
 function detectColMap(cells: (ExcelJS.CellValue | null)[]): ColMap | null {
-  // Look for the header row that contains "NAMA BANK" — scan all cells for known labels
   let hasNamaBank = false
   let totalCol = -1
   let entityCol = -1
@@ -51,41 +50,34 @@ function detectColMap(cells: (ExcelJS.CellValue | null)[]): ColMap | null {
 
   for (let i = 0; i < cells.length; i++) {
     const s = cellStr(cells[i]).toUpperCase()
-    if (s === 'NAMA BANK') hasNamaBank = true
+    // "NAMA BANK" or "NAMA BANK / TERMINAL" — startsWith covers both
+    if (s.startsWith('NAMA BANK')) hasNamaBank = true
     if (s === 'TOTAL') totalCol = i
     if (s === 'NOTA BILL') notaBillCol = i
-    // Entity/Remarks column may be labeled REMAKS, REMAKES, ENTITAS, ENTITY
     if (['REMAKS', 'REMAKES', 'ENTITAS', 'ENTITY', 'KETERANGAN'].includes(s)) entityCol = i
   }
 
   if (!hasNamaBank || totalCol === -1) return null
-
-  return {
-    totalCol,
-    entityCol,
-    notaBillCol,
-  }
+  return { totalCol, entityCol, notaBillCol }
 }
 
-// Known bank labels — first token of col B must be one of these to be treated as a bank entry
+// Known bank labels — first token of col B must be one of these
 const KNOWN_BANKS = new Set([
   'BCA', 'BNI', 'BRI', 'MANDIRI', 'PERMATA', 'CIMB', 'DANAMON',
   'BTN', 'OCBC', 'MAYBANK', 'PANIN', 'MEGA', 'BUKOPIN', 'BSI',
 ])
 
-// Check if the value in col B is the bank string ("BCA C2AP2381") vs a continuation
-// row where the terminal code is repeated (e.g. "2995", "7-8774", "22 87").
-// Returns null for continuation rows — caller keeps the last bankName/terminalId.
+// Indonesian month names for date-header detection (v3 template format)
+const IDN_DATE_RE = /\d{1,2}\s+(JANUARI|FEBRUARI|MARET|APRIL|MEI|JUNI|JULI|AGUSTUS|SEPTEMBER|OKTOBER|NOVEMBER|DESEMBER)\s+20\d{2}/i
+
+// Detect if col B contains a valid "BANK TERMINALID" string.
+// Returns null for continuation rows or non-bank rows (CASH, VOUCHER KLOOK, etc.).
 function parseBankCol(colB: string, colA: string): { bankName: string; terminalId: string | null } | null {
   if (!colB) return null
-
-  // Continuation: col B is the same value as col A (terminal code repeated)
-  if (colB.trim() === colA.trim()) return null
 
   const spaceIdx = colB.indexOf(' ')
   const firstToken = (spaceIdx > 0 ? colB.slice(0, spaceIdx) : colB).toUpperCase().trim()
 
-  // First token must be a recognised bank label
   if (!KNOWN_BANKS.has(firstToken)) return null
 
   const terminalId = spaceIdx > 0 ? colB.slice(spaceIdx + 1).trim() || null : null
@@ -112,9 +104,11 @@ export async function parseCashierFile(
 
   // State machine
   let currentBlock: 'REG' | 'EV' | null = null
+  let dateHeaderCount = 0   // counts date-only headers (v3 template: 1st=REG, 2nd=EV)
   let colMap: ColMap | null = null
   let lastBankName = ''
   let lastTerminalId: string | null = null
+  let lastTerminalCode = ''  // track col A of last valid EDC row
 
   sheet.eachRow((row, rowNum) => {
     const rowValues = row.values as ExcelJS.CellValue[]
@@ -123,22 +117,23 @@ export async function parseCashierFile(
     const rowText = cells.map(cellStr).join(' ').toUpperCase()
 
     // ── Block title detection ────────────────────────────────────────────────
-    // Handles both v3 template "BLOK REG"/"BLOK EV" and actual file "(REG)"/"(EV)"
+    // Priority 1: explicit REG/EV markers (old format & original v3 spec)
     const isRegTitle = rowText.includes('BLOK REG') || /\(\s*REG\s*\)/.test(rowText)
     const isEvTitle  = rowText.includes('BLOK EV')  || /\(\s*EV\s*\)/.test(rowText)
 
     if (isRegTitle && !isEvTitle) {
-      currentBlock = 'REG'
-      colMap = null                // reset; next header row will set it
-      lastBankName = ''
-      lastTerminalId = null
-      return
+      currentBlock = 'REG'; colMap = null; lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''; return
     }
     if (isEvTitle) {
-      currentBlock = 'EV'
-      colMap = null
-      lastBankName = ''
-      lastTerminalId = null
+      currentBlock = 'EV'; colMap = null; lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''; return
+    }
+
+    // Priority 2: date-only header (v3 template — "01 MARET 2026")
+    // First occurrence = REG, second occurrence = EV
+    if (IDN_DATE_RE.test(rowText) && !isRegTitle && !isEvTitle) {
+      dateHeaderCount++
+      currentBlock = dateHeaderCount === 1 ? 'REG' : 'EV'
+      colMap = null; lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''
       return
     }
 
@@ -148,15 +143,13 @@ export async function parseCashierFile(
     // ── Column header row detection ──────────────────────────────────────────
     if (!colMap) {
       const detected = detectColMap(cells)
-      if (detected) {
-        colMap = detected
-      }
-      // Header row itself is not a data row — skip regardless
+      if (detected) colMap = detected
+      // Header / kasir-names rows are never data rows
       skipped++
       return
     }
 
-    // ── Data row filter ──────────────────────────────────────────────────────
+    // ── Payment type filter ──────────────────────────────────────────────────
     const paymentType = cellStr(cells[2]).toUpperCase()
     if (!VALID_PAYMENT_TYPES.has(paymentType)) {
       skipped++
@@ -164,21 +157,28 @@ export async function parseCashierFile(
     }
 
     // ── Bank name resolution ─────────────────────────────────────────────────
-    // Col A (0): KODE EDC   Col B (1): NAMA BANK / TERMINAL (may be repeated code on continuation rows)
     const colAStr = cellStr(cells[0])
     const colBStr = cellStr(cells[1])
 
     const parsed = parseBankCol(colBStr, colAStr)
     if (parsed) {
-      lastBankName   = parsed.bankName
-      lastTerminalId = parsed.terminalId
+      // New bank terminal explicitly named in col B
+      lastBankName     = parsed.bankName
+      lastTerminalId   = parsed.terminalId
+      lastTerminalCode = colAStr
+    } else if (colAStr === lastTerminalCode && lastBankName) {
+      // Same terminal code in col A → continuation row (old file format)
+      // Keep lastBankName / lastTerminalId unchanged
+    } else {
+      // Non-EDC row (CASH, VOUCHER KLOOK, summary lines, etc.) — skip
+      skipped++
+      return
     }
-    // else: continuation row — keep lastBankName / lastTerminalId
 
     const terminalCode = colAStr || null
 
-    if (!lastBankName && !terminalCode) {
-      errors.push(`Baris ${rowNum}: NAMA BANK dan kode terminal kosong, dilewati.`)
+    if (!lastBankName) {
+      errors.push(`Baris ${rowNum}: NAMA BANK kosong, dilewati.`)
       skipped++
       return
     }
