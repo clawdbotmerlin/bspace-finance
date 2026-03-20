@@ -136,7 +136,7 @@ function extractAccountNumber(headerRows: unknown[][]): string | null {
 export function parseBankMutationFile(
   buffer: ArrayBuffer,
   config: BankConfigForParser,
-  sessionDate: Date,
+  sessionDate: Date | null,
 ): BankMutationParseResult {
   const wb = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: false, raw: true })
   const sheetName = wb.SheetNames[0]
@@ -145,7 +145,8 @@ export function parseBankMutationFile(
   const allRows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: null, raw: true })
 
   const { skipRowsTop, skipRowsBottom, columnMapping: cm } = config
-  const sessionDateISO = sessionDate.toISOString().split('T')[0]
+  // When sessionDate is null, keep ALL rows regardless of date (handles T+1 / T+2 settlements)
+  const sessionDateISO = sessionDate ? sessionDate.toISOString().split('T')[0] : null
 
   const headerRows = allRows.slice(0, skipRowsTop) as unknown[][]
   const accountNumber = extractAccountNumber(headerRows)
@@ -170,8 +171,8 @@ export function parseBankMutationFile(
       continue
     }
 
-    // Filter to session date only
-    if (dateISO !== sessionDateISO) {
+    // Filter to session date only when sessionDate is provided
+    if (sessionDateISO && dateISO !== sessionDateISO) {
       skipped++
       continue
     }

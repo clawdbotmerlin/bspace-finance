@@ -34,7 +34,10 @@ export const POST = withAuth(async (req: NextRequest) => {
   }
 
   const buffer = await file.arrayBuffer()
-  const result = parseBankMutationFile(buffer, config, session.sessionDate)
+  // Pass null as sessionDate so ALL rows in the file are kept regardless of date.
+  // EDC settlements typically arrive T+1 or T+2, so strict same-day filtering discards
+  // the very rows that should match the session's cashier entries.
+  const result = parseBankMutationFile(buffer, config, null)
 
   // Re-upload for the same bank replaces existing mutations (unless append mode for multi-file)
   if (!appendMode) {
