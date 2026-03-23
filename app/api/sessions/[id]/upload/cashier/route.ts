@@ -38,6 +38,7 @@ export const POST = withAuth(async (req: NextRequest) => {
         amount:        e.amount,
         notaBill:      e.notaBill,
         entityNameRaw: e.entityNameRaw,
+        kasirName:     e.kasirName,
         sourceRow:     e.sourceRow,
         matchStatus:   'unmatched',
       })),

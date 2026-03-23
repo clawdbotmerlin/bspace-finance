@@ -22,6 +22,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       amount: true,
       notaBill: true,
       entityNameRaw: true,
+      kasirName: true,
       sourceRow: true,
       matchStatus: true,
       matchedMutationId: true,

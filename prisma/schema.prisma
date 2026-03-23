@@ -168,6 +168,7 @@ model CashierEntry {
   amount            Decimal     @db.Decimal(18, 2)
   notaBill          String?
   entityNameRaw     String?
+  kasirName         String?     // Name(s) from KASIR BERTUGAS row (v3 template)
   sourceRow         Int?        // Row number in the cashier Excel sheet
   matchStatus       MatchStatus @default(unmatched)
   matchedMutationId String?

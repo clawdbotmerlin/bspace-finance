@@ -46,6 +46,7 @@ interface CashierEntryFull {
   amount: string
   notaBill: string | null
   entityNameRaw: string | null
+  kasirName: string | null
   sourceRow: number | null
   matchStatus: string
   matchedMutationId: string | null
@@ -582,6 +583,7 @@ function EntryRow({
   const isUnmatched = entry.matchStatus === 'unmatched'
   const isZero = entry.matchStatus === 'zero'
   const isMismatch = discrepancy?.discrepancyType === 'amount_mismatch'
+  const isResolved = discrepancy?.status === 'resolved'
   const amountDiff = entry.bankMutation
     ? Number(entry.bankMutation.grossAmount) - Number(entry.amount)
     : 0
@@ -610,12 +612,19 @@ function EntryRow({
             {formatRupiah(entry.amount)}
           </span>
         </div>
-        {entry.terminalId && (
-          <p className="text-[11px] text-slate-500 font-mono mt-0.5">{entry.terminalId}</p>
+        {/* Terminal: bankName + terminalId */}
+        <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+          {entry.bankName}{entry.terminalId ? ` ${entry.terminalId}` : ''}
+        </p>
+        {entry.kasirName && (
+          <p className="text-[11px] text-slate-700 mt-0.5 flex items-center gap-1">
+            <span className="text-[9px] text-slate-400 uppercase font-semibold tracking-wide">kasir</span>
+            {entry.kasirName}
+          </p>
         )}
         {entry.entityNameRaw && (
-          <p className="text-[11px] text-slate-600 mt-0.5 flex items-center gap-1">
-            <span className="text-[9px] text-slate-400 uppercase font-semibold tracking-wide">kasir</span>
+          <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
+            <span className="text-[9px] text-slate-400 uppercase font-semibold tracking-wide">entitas</span>
             {entry.entityNameRaw}
           </p>
         )}
@@ -690,23 +699,45 @@ function EntryRow({
           </span>
         ) : isUnmatched ? (
           <>
-            <span className="flex items-center gap-1 text-[11px] text-red-600 font-semibold">
-              <XCircle className="w-3.5 h-3.5" /> Tidak cocok
-            </span>
-            {discrepancy && (
+            {isResolved ? (
+              <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Diselesaikan
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-[11px] text-red-600 font-semibold">
+                <XCircle className="w-3.5 h-3.5" /> Tidak cocok
+              </span>
+            )}
+            {discrepancy && !isResolved && (
               <Button size="sm" variant="outline" className="text-[11px] h-6 px-2 py-0" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
                 Tindak
+              </Button>
+            )}
+            {discrepancy && isResolved && (
+              <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 py-0 text-slate-400" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
+                Edit
               </Button>
             )}
           </>
         ) : isMismatch ? (
           <>
-            <span className="flex items-center gap-1 text-[11px] text-amber-600 font-semibold">
-              <AlertTriangle className="w-3.5 h-3.5" /> Selisih
-            </span>
-            {discrepancy && (
+            {isResolved ? (
+              <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Diselesaikan
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-[11px] text-amber-600 font-semibold">
+                <AlertTriangle className="w-3.5 h-3.5" /> Selisih
+              </span>
+            )}
+            {discrepancy && !isResolved && (
               <Button size="sm" variant="outline" className="text-[11px] h-6 px-2 py-0" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
                 Tindak
+              </Button>
+            )}
+            {discrepancy && isResolved && (
+              <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 py-0 text-slate-400" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
+                Edit
               </Button>
             )}
           </>

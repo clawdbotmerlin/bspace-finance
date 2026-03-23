@@ -10,6 +10,7 @@ export interface ParsedCashierEntry {
   amount: number
   notaBill: string | null
   entityNameRaw: string | null
+  kasirName: string | null   // from KASIR BERTUGAS header row (v3 template)
   blockType: 'REG' | 'EV'   // auto-detected from section header
   sourceRow: number          // 1-based row number in the Excel sheet
 }
@@ -112,6 +113,7 @@ export async function parseCashierFile(
   let currentBlock: 'REG' | 'EV' | null = null
   let dateHeaderCount = 0   // counts date-only headers (v3 template: 1st=REG, 2nd=EV)
   let colMap: ColMap | null = null
+  let kasirColMap: Map<number, string> = new Map()  // col-index → kasir name (v3)
   let lastBankName = ''
   let lastTerminalId: string | null = null
   let lastTerminalCode = ''  // track col A of last valid EDC row
@@ -128,10 +130,10 @@ export async function parseCashierFile(
     const isEvTitle  = rowText.includes('BLOK EV')  || /\(\s*EV\s*\)/.test(rowText)
 
     if (isRegTitle && !isEvTitle) {
-      currentBlock = 'REG'; colMap = null; lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''; return
+      currentBlock = 'REG'; colMap = null; kasirColMap = new Map(); lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''; return
     }
     if (isEvTitle) {
-      currentBlock = 'EV'; colMap = null; lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''; return
+      currentBlock = 'EV'; colMap = null; kasirColMap = new Map(); lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''; return
     }
 
     // Priority 2: date-only header (v3 template — "01 MARET 2026")
@@ -139,7 +141,7 @@ export async function parseCashierFile(
     if (IDN_DATE_RE.test(rowText) && !isRegTitle && !isEvTitle) {
       dateHeaderCount++
       currentBlock = dateHeaderCount === 1 ? 'REG' : 'EV'
-      colMap = null; lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''
+      colMap = null; kasirColMap = new Map(); lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''
       return
     }
 
@@ -151,6 +153,19 @@ export async function parseCashierFile(
       const detected = detectColMap(cells)
       if (detected) colMap = detected
       // Header / kasir-names rows are never data rows
+      skipped++
+      return
+    }
+
+    // ── KASIR BERTUGAS row (v3 template) — extract per-col kasir names ──────
+    // This row appears after the column header; col A contains "KASIR BERTUGAS"
+    if (rowText.includes('KASIR BERTUGAS')) {
+      kasirColMap = new Map()
+      // Kasir names live in the POS columns (indices 4–11, cols E–L roughly)
+      for (let i = 4; i <= 11; i++) {
+        const name = cellStr(cells[i]).trim()
+        if (name) kasirColMap.set(i, name)
+      }
       skipped++
       return
     }
@@ -194,6 +209,16 @@ export async function parseCashierFile(
     const entityNameRaw = colMap.entityCol >= 0 ? (cellStr(cells[colMap.entityCol]) || null) : null
     const notaBill      = colMap.notaBillCol >= 0 ? (cellStr(cells[colMap.notaBillCol]) || null) : null
 
+    // Resolve kasir name: find which POS columns have non-zero amounts
+    let kasirName: string | null = null
+    if (kasirColMap.size > 0) {
+      const names: string[] = []
+      kasirColMap.forEach((name, colIdx) => {
+        if (cellNum(cells[colIdx]) > 0) names.push(name)
+      })
+      kasirName = names.length > 0 ? names.join(' / ') : null
+    }
+
     entries.push({
       terminalCode,
       bankName: lastBankName,
@@ -202,6 +227,7 @@ export async function parseCashierFile(
       amount,
       notaBill,
       entityNameRaw,
+      kasirName,
       blockType: currentBlock!,
       sourceRow: rowNum,
     })
