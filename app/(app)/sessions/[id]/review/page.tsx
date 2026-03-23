@@ -208,7 +208,8 @@ export default function ReviewPage() {
   )
 
   const isReadOnly = session.status !== 'reviewing'
-  const openDiscCount = discrepancies.filter(d => d.status === 'open').length
+  // Only count missing_in_bank as requiring action — these are sales with no bank transfer (high alert)
+  const openDiscCount = discrepancies.filter(d => d.status === 'open' && d.discrepancyType === 'missing_in_bank').length
 
   // Separate EDC entries from CASH/VOUCHER
   const edcEntries = entries.filter(e => e.paymentType !== 'CASH' && e.paymentType !== 'VOUCHER')
@@ -339,9 +340,6 @@ export default function ReviewPage() {
           <UnexpectedSection
             unexpected={unexpected}
             session={session}
-            discByMutationId={discByMutationId}
-            isReadOnly={isReadOnly}
-            onResolve={setResolveTarget}
           />
         </div>
       )}
@@ -746,12 +744,9 @@ function RingkasanSection({ block, kasirNames, allEntries }: {
 
 // ─── Unexpected Section ───────────────────────────────────────────────────────
 
-function UnexpectedSection({ unexpected, session, discByMutationId, isReadOnly, onResolve }: {
+function UnexpectedSection({ unexpected, session }: {
   unexpected: UnexpectedMutation[]
   session: SessionDetail
-  discByMutationId: Map<string, Discrepancy>
-  isReadOnly: boolean
-  onResolve: (d: Discrepancy) => void
 }) {
   const total = unexpected.reduce((s, m) => s + Number(m.grossAmount), 0)
   const banks = Array.from(new Set(unexpected.map(m => m.bankName))).sort()
@@ -774,8 +769,6 @@ function UnexpectedSection({ unexpected, session, discByMutationId, isReadOnly, 
               <span className="font-mono font-semibold text-slate-600">{formatRupiah(bankTotal)}</span>
             </div>
             {muts.map(mut => {
-              const disc = discByMutationId.get(mut.id) ?? null
-              const discResolved = disc?.status === 'resolved'
               return (
                 <div key={mut.id} className="grid grid-cols-[1fr_auto] gap-2 px-4 py-2 items-start border-b border-orange-50/80 last:border-0 bg-orange-50/20 hover:brightness-[0.97] hover:bg-orange-50/60 transition-colors cursor-default">
                   <div>
@@ -793,13 +786,9 @@ function UnexpectedSection({ unexpected, session, discByMutationId, isReadOnly, 
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    {discResolved
-                      ? <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Selesai</span>
-                      : <span className="flex items-center gap-1 text-[11px] text-orange-600 font-semibold"><AlertCircle className="w-3.5 h-3.5" />Tak terduga</span>
-                    }
-                    {!discResolved && disc && (
-                      <Button size="sm" variant="outline" className="text-[11px] h-6 px-2 py-0" onClick={() => onResolve(disc)} disabled={isReadOnly}>Tindak</Button>
-                    )}
+                    <span className="flex items-center gap-1 text-[11px] text-orange-500 font-semibold">
+                      <AlertCircle className="w-3.5 h-3.5" />Tak terduga
+                    </span>
                   </div>
                 </div>
               )
