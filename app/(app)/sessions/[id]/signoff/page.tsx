@@ -165,9 +165,23 @@ export default function SignoffPage() {
         const matchData = await mRes.json()
         const discData: Discrepancy[] = await dRes.json()
 
+        // matches API now returns flat entries; adapt to MatchPair format
+        const allEntries: Array<{
+          id: string; bankName: string; terminalCode: string | null; terminalId: string | null
+          paymentType: string; amount: string; entityNameRaw: string | null; matchStatus: string
+          bankMutation: { id: string; bankName: string; accountNumber: string | null; grossAmount: string; description: string | null; referenceNo: string | null } | null
+        }> = matchData.entries ?? []
+        const pairs: MatchPair[] = allEntries
+          .filter(e => e.matchStatus === 'matched' && e.bankMutation)
+          .map(e => ({
+            cashierEntry: { id: e.id, bankName: e.bankName, terminalCode: e.terminalCode, terminalId: e.terminalId, paymentType: e.paymentType, amount: e.amount, entityNameRaw: e.entityNameRaw },
+            bankMutation: e.bankMutation,
+            amountDiff: Math.abs(Number(e.amount) - Number(e.bankMutation!.grossAmount)),
+          }))
+
         setSession(sessionData)
-        setMatches(matchData.pairs)
-        setZeroCount(matchData.zeroCount)
+        setMatches(pairs)
+        setZeroCount(matchData.summary?.zeroCount ?? 0)
         setDiscrepancies(discData)
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Terjadi kesalahan.')

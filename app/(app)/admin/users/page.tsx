@@ -27,15 +27,21 @@ interface User {
 }
 
 const ROLE_LABELS: Record<Role, string> = {
-  admin: 'Admin',
-  finance: 'Finance',
-  manager: 'Manager',
+  admin: 'Administrator',
+  finance: 'Finance Staff',
+  manager: 'Finance Head',
+}
+
+const ROLE_DESC: Record<Role, string> = {
+  admin: 'Akses penuh — kelola pengguna, data master, dan semua fitur',
+  finance: 'Upload kasir, jalankan rekonsiliasi, submit untuk persetujuan',
+  manager: 'Tinjau dan tandatangani laporan rekonsiliasi',
 }
 
 const ROLE_VARIANTS: Record<Role, 'default' | 'secondary' | 'outline'> = {
   admin: 'default',
-  finance: 'secondary',
-  manager: 'outline',
+  manager: 'secondary',
+  finance: 'outline',
 }
 
 export default function UsersPage() {
@@ -94,6 +100,7 @@ export default function UsersPage() {
                 <td className="px-4 py-3 text-slate-600">{user.email}</td>
                 <td className="px-4 py-3">
                   <Badge variant={ROLE_VARIANTS[user.role]}>{ROLE_LABELS[user.role]}</Badge>
+                  <p className="text-[10px] text-slate-400 mt-0.5 max-w-[180px] leading-tight">{ROLE_DESC[user.role]}</p>
                 </td>
                 <td className="px-4 py-3 text-slate-500">{user.outlet?.name ?? '—'}</td>
                 <td className="px-4 py-3">
@@ -214,9 +221,9 @@ function CreateUserDialog({ open, onClose, onCreated }: {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="finance">Finance</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="admin">Administrator</SelectItem>
+                <SelectItem value="manager">Finance Head</SelectItem>
+                <SelectItem value="finance">Finance Staff</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -265,11 +272,12 @@ function EditRoleDialog({ user, onClose, onSaved }: {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="admin">Admin</SelectItem>
-              <SelectItem value="finance">Finance</SelectItem>
-              <SelectItem value="manager">Manager</SelectItem>
+              <SelectItem value="admin">Administrator</SelectItem>
+              <SelectItem value="manager">Finance Head</SelectItem>
+              <SelectItem value="finance">Finance Staff</SelectItem>
             </SelectContent>
           </Select>
+          {role && <p className="text-[11px] text-slate-500 mt-1">{ROLE_DESC[role]}</p>}
         </div>
         <DialogFooter className="mt-4">
           <Button variant="outline" onClick={onClose}>Batal</Button>

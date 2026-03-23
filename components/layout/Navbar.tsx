@@ -41,7 +41,7 @@ const NAV_ITEMS = [
 const POLL_MS = 60_000
 
 function roleLabel(role: string) {
-  return { admin: 'Admin', finance: 'Finance', manager: 'Manager' }[role] ?? role
+  return { admin: 'Administrator', finance: 'Finance Staff', manager: 'Finance Head' }[role] ?? role
 }
 
 function initials(name: string) {
