@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup Review Rekonsiliasi</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; color: #1e293b; font-size: 13px; }
+  .page { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  /* Header */
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+  .header-left h1 { font-size: 20px; font-weight: 600; color: #0f172a; }
+  .header-left .breadcrumb { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+  .badges { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .badge { padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; border: 1px solid; }
+  .badge-outline { border-color: #cbd5e1; color: #475569; background: white; }
+  .badge-warning { border-color: #fcd34d; color: #92400e; background: #fef9c3; }
+  .btn { display: inline-flex; align-items: center; gap-6px; padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid; }
+  .btn-outline { background: white; border-color: #cbd5e1; color: #475569; }
+  .btn-primary { background: #2563eb; border-color: #2563eb; color: white; }
+  .btn-group { display: flex; gap: 8px; }
+
+  /* Summary cards */
+  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .card { background: white; border-radius: 10px; border: 1px solid #e2e8f0; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .card-label { font-size: 11px; color: #64748b; font-weight: 500; margin-bottom: 4px; }
+  .card-value { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card-sub { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+  .emerald { color: #059669; }
+  .red { color: #dc2626; }
+  .slate { color: #475569; }
+  .amber { color: #d97706; }
+
+  /* Alert */
+  .alert { display: flex; align-items: center; gap: 8px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; }
+
+  /* Tabs */
+  .tabs { display: flex; border-bottom: 1px solid #e2e8f0; background: white; border-radius: 10px 10px 0 0; overflow: hidden; }
+  .tab { padding: 10px 16px; font-size: 13px; font-weight: 500; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+  .tab.active { color: #2563eb; border-bottom-color: #2563eb; }
+  .tab-count { font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 999px; background: #f1f5f9; color: #64748b; }
+  .tab.active .tab-count { background: #dbeafe; color: #2563eb; }
+
+  /* Main content */
+  .content-box { background: white; border: 1px solid #e2e8f0; border-radius: 0 0 10px 10px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+
+  /* Block header */
+  .block-header { padding: 10px 16px; font-size: 13px; font-weight: 700; color: white; display: flex; align-items: center; justify-content: space-between; }
+  .block-reg { background: #1d4ed8; }
+  .block-ev  { background: #7c3aed; }
+
+  /* Bank section header */
+  .bank-header { padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
+  .bank-bca     { background: #eff6ff; border-bottom: 1px solid #dbeafe; }
+  .bank-bni     { background: #fff7ed; border-bottom: 1px solid #fed7aa; }
+  .bank-bri     { background: #f0f9ff; border-bottom: 1px solid #bae6fd; }
+  .bank-mandiri { background: #fefce8; border-bottom: 1px solid #fef08a; }
+  .bank-name-bca     { font-weight: 700; color: #1d4ed8; }
+  .bank-name-bni     { font-weight: 700; color: #c2410c; }
+  .bank-name-bri     { font-weight: 700; color: #0284c7; }
+  .bank-name-mandiri { font-weight: 700; color: #a16207; }
+  .bank-stats { display: flex; gap: 16px; color: #64748b; }
+  .bank-stats span strong { color: #1e293b; font-variant-numeric: tabular-nums; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: #f8fafc; }
+  th { padding: 6px 10px; text-align: left; font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f8fafc; }
+
+  /* Kasir header row */
+  .kasir-header-row td { background: #f0fdf4; font-size: 10px; font-weight: 700; color: #16a34a; text-transform: uppercase; letter-spacing: .04em; padding: 5px 10px; border-bottom: 1px solid #dcfce7; }
+  .kasir-label { color: #94a3b8; font-weight: 500; font-size: 10px; }
+
+  /* Data row */
+  td.kode { font-family: monospace; font-size: 11px; color: #64748b; }
+  td.terminal { font-size: 12px; font-weight: 600; color: #1e293b; }
+  td.terminal small { display: block; font-size: 10px; font-weight: 400; color: #94a3b8; font-family: monospace; margin-top: 1px; }
+  td.entitas { font-size: 11px; color: #475569; max-width: 160px; }
+  td.amount { text-align: right; font-variant-numeric: tabular-nums; font-family: monospace; font-size: 12px; color: #1e293b; }
+  td.amount.zero { color: #cbd5e1; }
+  td.amount.filled { color: #1e293b; font-weight: 600; }
+  td.total { text-align: right; font-variant-numeric: tabular-nums; font-family: monospace; font-size: 12px; font-weight: 700; color: #0f172a; }
+  td.total.zero { color: #94a3b8; font-weight: 400; }
+
+  /* Payment type badge */
+  .type-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; border: 1px solid; }
+  .type-QR { background: #f3e8ff; color: #7c3aed; border-color: #e9d5ff; }
+  .type-DEBIT { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+  .type-KK { background: #fce7f3; color: #be185d; border-color: #fbcfe8; }
+  .type-CASH { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
+  .type-VOUCHER { background: #fef9c3; color: #92400e; border-color: #fde68a; }
+
+  /* Status badge */
+  .status-matched { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #059669; }
+  .status-unmatched { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #dc2626; }
+  .status-selisih { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #d97706; }
+  .status-zero { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #94a3b8; }
+  .status-cash { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #64748b; font-style: italic; }
+
+  /* Bank match details */
+  .bank-match-detail { font-size: 10px; color: #64748b; margin-top: 2px; }
+  .t-badge { font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; }
+  .t0 { background: #dcfce7; color: #15803d; }
+  .t1 { background: #dbeafe; color: #1d4ed8; }
+  .t2 { background: #f3e8ff; color: #7c3aed; }
+
+  /* Subtotal row */
+  .subtotal-row td { background: #1e3a5f; color: white; font-weight: 700; font-size: 12px; font-variant-numeric: tabular-nums; font-family: monospace; padding: 8px 10px; }
+  .subtotal-row td.label { font-family: -apple-system, sans-serif; font-size: 11px; letter-spacing: .03em; }
+  .subtotal-row td.amount-sub { text-align: right; }
+
+  /* Cash section */
+  .cash-row td { background: #f0fdf4; }
+  td.cash-label { font-weight: 600; color: #065f46; font-size: 11px; }
+
+  /* RINGKASAN KASIR */
+  .ringkasan-header { background: #1e293b; color: white; padding: 10px 16px; font-size: 13px; font-weight: 700; }
+  .ringkasan-subheader { background: #334155; color: #94a3b8; padding: 6px 16px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .ringkasan-row { display: grid; grid-template-columns: 220px repeat(4, 1fr); border-bottom: 1px solid #f1f5f9; }
+  .ringkasan-row.header-row { background: #f8fafc; }
+  .ringkasan-cell { padding: 7px 12px; font-size: 12px; font-variant-numeric: tabular-nums; font-family: monospace; text-align: right; border-right: 1px solid #f1f5f9; }
+  .ringkasan-cell.label { font-family: -apple-system, sans-serif; font-size: 11px; text-align: left; color: #475569; font-variant-numeric: normal; }
+  .ringkasan-cell.kasir-name { font-weight: 700; color: #1e293b; font-family: -apple-system, sans-serif; }
+  .ringkasan-cell.highlight-yellow { background: #fef9c3; color: #92400e; }
+  .ringkasan-cell.highlight-green { background: #dcfce7; color: #15803d; }
+  .ringkasan-cell.selisih-bad { background: #fee2e2; color: #dc2626; font-weight: 700; }
+  .ringkasan-cell.selisih-ok { background: #dcfce7; color: #15803d; font-weight: 700; }
+  .ringkasan-cell.total-row { font-weight: 700; color: #1e293b; background: #f1f5f9; }
+  .ringkasan-cell.bank-label { font-family: -apple-system, sans-serif; font-size: 11px; text-align: left; color: #64748b; padding-left: 24px; }
+
+  /* Unexpected */
+  .unexpected-header { background: #fff7ed; border-top: 2px solid #f97316; padding: 8px 16px; font-size: 12px; font-weight: 600; color: #c2410c; display: flex; justify-content: space-between; }
+  .unexp-row td { background: #fff7ed; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+
+  .separator { border-top: 2px solid #e2e8f0; }
+  .section-gap { height: 8px; background: #f1f5f9; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="breadcrumb">← Riwayat</div>
+      <h1>Review Rekonsiliasi</h1>
+      <div class="badges">
+        <span class="badge badge-outline">Canna</span>
+        <span class="badge badge-outline">1 Maret 2026</span>
+        <span class="badge badge-warning">Menunggu Review</span>
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-outline">↻ Jalankan Ulang</button>
+      <button class="btn btn-primary">→ Submit TTD</button>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="summary-grid">
+    <div class="card">
+      <div class="card-label">Total Kasir (EDC)</div>
+      <div class="card-value slate">Rp 38.317.400</div>
+      <div class="card-sub">36 entri · REG + EV</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Cocok dengan Bank</div>
+      <div class="card-value emerald">Rp 12.044.900</div>
+      <div class="card-sub">8 entri matched</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Tidak Ada di Bank</div>
+      <div class="card-value red">Rp 0</div>
+      <div class="card-sub">0 entri unmatched</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Mutasi Tak Terduga</div>
+      <div class="card-value amber">Rp 25.200.000</div>
+      <div class="card-sub">44 mutasi bank</div>
+    </div>
+  </div>
+
+  <!-- Alert -->
+  <div class="alert">
+    ⚠️ <strong>3 item</strong> perlu ditindaklanjuti sebelum submit
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active">Semua Entri <span class="tab-count">80</span></div>
+    <div class="tab">Perlu Perhatian <span class="tab-count" style="background:#fee2e2;color:#dc2626">52</span></div>
+    <div class="tab">Cocok Saja <span class="tab-count">8</span></div>
+  </div>
+
+  <div class="content-box">
+
+    <!-- ══════════════════ REG BLOCK ══════════════════ -->
+    <div class="block-header block-reg">
+      <span>📋 REG — 01 Maret 2026</span>
+      <span style="font-size:11px;font-weight:400;opacity:.8">SUBTOTAL: Rp 38.317.400 &nbsp;|&nbsp; 30 entri EDC + CASH</span>
+    </div>
+
+    <!-- BCA Section -->
+    <div class="bank-header bank-bca">
+      <div class="bank-name-bca">BCA &nbsp;<span style="font-weight:400;color:#3b82f6;font-size:11px">9 entri</span></div>
+      <div class="bank-stats">
+        <span>Kasir <strong>Rp 4.766.700</strong></span>
+        <span>Bank CR <strong>Rp 4.766.000</strong></span>
+        <span style="color:#d97706">Selisih <strong style="color:#d97706">Rp −700</strong></span>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:60px">KODE</th>
+          <th>BANK / TERMINAL</th>
+          <th style="width:60px">JENIS</th>
+          <th style="width:150px">ENTITAS</th>
+          <th class="num" style="width:90px">SINAR</th>
+          <th class="num" style="width:90px">MEI</th>
+          <th class="num" style="width:90px">MITA</th>
+          <th class="num" style="width:90px">RINDA</th>
+          <th class="num" style="width:90px">DIO</th>
+          <th class="num" style="width:110px">TOTAL</th>
+          <th style="width:150px">STATUS BANK</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Kasir header row -->
+        <tr class="kasir-header-row">
+          <td></td>
+          <td><span class="kasir-label">↑ KASIR BERTUGAS:</span></td>
+          <td></td>
+          <td></td>
+          <td class="num">SINAR</td>
+          <td class="num">MEI</td>
+          <td class="num">MITA</td>
+          <td class="num">RINDA</td>
+          <td class="num">DIO</td>
+          <td></td><td></td>
+        </tr>
+        <!-- C2AP2381 rows -->
+        <tr>
+          <td class="kode">2995</td>
+          <td class="terminal">BCA C2AP2381 <small>C2AP2381</small></td>
+          <td><span class="type-badge type-QR">QR</span></td>
+          <td class="entitas">PT CAHAYA MENTARI BERSINAR</td>
+          <td class="amount filled">1.000.000</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="total">1.000.000</td>
+          <td>
+            <div class="status-matched">✓ Cocok</div>
+            <div class="bank-match-detail">Rp 1.000.000 · 1 Mar <span class="t-badge t0">T+0</span></div>
+          </td>
+        </tr>
+        <tr>
+          <td class="kode">2995</td>
+          <td class="terminal">BCA C2AP2381 <small>C2AP2381</small></td>
+          <td><span class="type-badge type-DEBIT">DEBIT</span></td>
+          <td class="entitas">PT CAHAYA MENTARI BERSINAR</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="total zero">—</td>
+          <td><div class="status-zero">⊖ Nol</div></td>
+        </tr>
+        <tr>
+          <td class="kode">2995</td>
+          <td class="terminal">BCA C2AP2381 <small>C2AP2381</small></td>
+          <td><span class="type-badge type-KK">KK</span></td>
+          <td class="entitas">PT CAHAYA MENTARI BERSINAR</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="total zero">—</td>
+          <td><div class="status-zero">⊖ Nol</div></td>
+        </tr>
+        <!-- C2BB8572 rows -->
+        <tr>
+          <td class="kode">2995</td>
+          <td class="terminal">BCA C2BB8572 <small>C2BB8572</small></td>
+          <td><span class="type-badge type-QR">QR</span></td>
+          <td class="entitas">PT CAHAYA MENTARI BERSINAR</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount filled">100.000</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="total">100.000</td>
+          <td>
+            <div class="status-selisih">⚠ Selisih</div>
+            <div class="bank-match-detail">Bank: Rp 99.300 · 3 Mar <span class="t-badge t1">T+1</span> (−700)</div>
+          </td>
+        </tr>
+        <tr>
+          <td class="kode">2995</td>
+          <td class="terminal">BCA C2BB8572 <small>C2BB8572</small></td>
+          <td><span class="type-badge type-DEBIT">DEBIT</span></td>
+          <td class="entitas">PT CAHAYA MENTARI BERSINAR</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="total zero">—</td>
+          <td><div class="status-zero">⊖ Nol</div></td>
+        </tr>
+        <tr>
+          <td class="kode">2995</td>
+          <td class="terminal">BCA C2BB8572 <small>C2BB8572</small></td>
+          <td><span class="type-badge type-KK">KK</span></td>
+          <td class="entitas">PT CAHAYA MENTARI BERSINAR</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount zero">—</td>
+          <td class="amount filled">3.666.700</td>
+          <td class="total">3.666.700</td>
+          <td>
+            <div class="status-matched">✓ Cocok</div>
+            <div class="bank-match-detail">Rp 3.666.700 · 3 Mar <span class="t-badge t1">T+1</span></div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- BNI Section -->
+    <div class="bank-header bank-bni" style="margin-top:0">
+      <div class="bank-name-bni">BNI &nbsp;<span style="font-weight:400;color:#ea580c;font-size:11px">6 entri</span></div>
+      <div class="bank-stats">
+        <span>Kasir <strong>Rp 10.712.200</strong></span>
+        <span>Bank CR <strong>Rp 10.712.200</strong></span>
+        <span style="color:#059669">Selisih <strong style="color:#059669">Rp 0</strong></span>
+      </div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:60px">KODE</th><th>BANK / TERMINAL</th><th style="width:60px">JENIS</th><th style="width:150px">ENTITAS</th>
+        <th class="num" style="width:90px">SINAR</th><th class="num" style="width:90px">MEI</th><th class="num" style="width:90px">MITA</th><th class="num" style="width:90px">RINDA</th><th class="num" style="width:90px">DIO</th>
+        <th class="num" style="width:110px">TOTAL</th><th style="width:150px">STATUS BANK</th>
+      </tr></thead>
+      <tbody>
+        <tr class="kasir-header-row">
+          <td></td><td><span class="kasir-label">↑ KASIR BERTUGAS:</span></td><td></td><td></td>
+          <td class="num">SINAR</td><td class="num">MEI</td><td class="num">MITA</td><td class="num">RINDA</td><td class="num">DIO</td>
+          <td></td><td></td>
+        </tr>
+        <tr>
+          <td class="kode">9304</td>
+          <td class="terminal">BNI 08388049 <small>08388049</small></td>
+          <td><span class="type-badge type-QR">QR</span></td>
+          <td class="entitas">PT CAHAYA MENTARI BERSINAR</td>
+          <td class="amount filled">2.044.900</td><td class="amount zero">—</td><td class="amount zero">—</td><td class="amount zero">—</td><td class="amount zero">—</td>
+          <td class="total">2.044.900</td>
+          <td><div class="status-matched">✓ Cocok</div><div class="bank-match-detail">Rp 2.044.900 · 1 Mar <span class="t-badge t0">T+0</span></div></td>
+        </tr>
+        <tr>
+          <td class="kode">9304</td>
+          <td class="terminal">BNI 08388049 <small>08388049</small></td>
+          <td><span class="type-badge type-DEBIT">DEBIT</span></td>
+          <td class="entitas">PT CAHAYA MENTARI BERSINAR</td>
+          <td class="amount zero">—</td><td class="amount zero">—</td><td class="amount zero">—</td><td class="amount zero">—</td><td class="amount zero">—</td>
+          <td class="total zero">—</td>
+          <td><div class="status-zero">⊖ Nol</div></td>
+        </tr>
+        <tr>
+          <td class="kode">9304</td>
+          <td class="terminal">BNI 08388049 <small>08388049</small></td>
+          <td><span class="type-badge type-KK">KK</span></td>
+          <td class="entitas">PT CAHAYA MENTARI BERSINAR</td>
+          <td class="amount zero">—</td><td class="amount zero">—</td><td class="amount filled">8.667.300</td><td class="amount zero">—</td><td class="amount zero">—</td>
+          <td class="total">8.667.300</td>
+          <td><div class="status-matched">✓ Cocok</div><div class="bank-match-detail">Rp 8.667.300 · 3 Mar <span class="t-badge t1">T+1</span></div></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- CASH rows -->
+    <table>
+      <tbody>
+        <tr class="cash-row">
+          <td style="width:60px" class="kode">—</td>
+          <td style="width:150px;padding-left:16px"><span class="type-badge type-CASH">CASH</span></td>
+          <td style="width:60px"></td>
+          <td style="width:150px" class="entitas">—</td>
+          <td class="amount filled" style="width:90px;text-align:right">2.706.400</td>
+          <td class="amount zero" style="width:90px;text-align:right">—</td>
+          <td class="amount filled" style="width:90px;text-align:right">4.694.800</td>
+          <td class="amount filled" style="width:90px;text-align:right">2.145.400</td>
+          <td class="amount zero" style="width:90px;text-align:right">—</td>
+          <td class="total" style="width:110px">9.546.600</td>
+          <td style="width:150px"><div class="status-cash">💵 Kas Fisik</div></td>
+        </tr>
+        <tr class="cash-row">
+          <td class="kode">—</td>
+          <td style="padding-left:16px"><span class="type-badge type-VOUCHER">VOUCHER</span> KLOOK</td>
+          <td></td>
+          <td class="entitas">PT CAHAYA MENTARI BERSINAR</td>
+          <td class="amount zero" style="text-align:right">—</td>
+          <td class="amount zero" style="text-align:right">—</td>
+          <td class="amount zero" style="text-align:right">—</td>
+          <td class="amount zero" style="text-align:right">—</td>
+          <td class="amount filled" style="text-align:right">75.000</td>
+          <td class="total">75.000</td>
+          <td><div class="status-cash">🎟 Voucher</div></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- SUBTOTAL REG -->
+    <table>
+      <tbody>
+        <tr class="subtotal-row">
+          <td class="label" style="width:60px"></td>
+          <td class="label" style="padding-left:16px">SUBTOTAL — REG</td>
+          <td style="width:60px"></td>
+          <td style="width:150px"></td>
+          <td class="amount-sub" style="width:90px">5.035.800</td>
+          <td class="amount-sub" style="width:90px">0</td>
+          <td class="amount-sub" style="width:90px">22.282.400</td>
+          <td class="amount-sub" style="width:90px">11.017.700</td>
+          <td class="amount-sub" style="width:90px">75.000</td>
+          <td class="amount-sub" style="width:110px">38.317.400</td>
+          <td style="width:150px"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="section-gap"></div>
+
+    <!-- ══════════════════ EV BLOCK ══════════════════ -->
+    <div class="block-header block-ev">
+      <span>🎪 EV — 01 Maret 2026</span>
+      <span style="font-size:11px;font-weight:400;opacity:.8">SUBTOTAL: Rp 6.750.000 &nbsp;|&nbsp; 6 entri EDC + CASH</span>
+    </div>
+
+    <!-- BNI EV Section -->
+    <div class="bank-header bank-bni">
+      <div class="bank-name-bni">BNI &nbsp;<span style="font-weight:400;color:#ea580c;font-size:11px">6 entri</span></div>
+      <div class="bank-stats">
+        <span>Kasir <strong>Rp 3.590.000</strong></span>
+        <span>Bank CR <strong>Rp 3.590.000</strong></span>
+        <span style="color:#059669">Selisih <strong style="color:#059669">Rp 0</strong></span>
+      </div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:60px">KODE</th><th>BANK / TERMINAL</th><th style="width:60px">JENIS</th><th style="width:150px">ENTITAS</th>
+        <th class="num" style="width:90px">SINAR</th><th class="num" style="width:90px">MEI</th><th class="num" style="width:90px">MITA</th><th class="num" style="width:90px">RINDA</th><th class="num" style="width:90px">DIO</th>
+        <th class="num" style="width:110px">TOTAL</th><th style="width:150px">STATUS BANK</th>
+      </tr></thead>
+      <tbody>
+        <tr class="kasir-header-row">
+          <td></td><td><span class="kasir-label">↑ KASIR BERTUGAS:</span></td><td></td><td></td>
+          <td class="num">SINAR</td><td class="num">MEI</td><td class="num">MITA</td><td class="num">RINDA</td><td class="num">DIO</td>
+          <td></td><td></td>
+        </tr>
+        <tr>
+          <td class="kode">8824</td>
+          <td class="terminal">BNI 08190203 <small>08190203</small></td>
+          <td><span class="type-badge type-QR">QR</span></td>
+          <td class="entitas">CV BERKAT JAYA BAHAGIA</td>
+          <td class="amount zero">—</td><td class="amount zero">—</td><td class="amount zero">—</td><td class="amount filled">2.120.000</td><td class="amount zero">—</td>
+          <td class="total">2.120.000</td>
+          <td><div class="status-matched">✓ Cocok</div><div class="bank-match-detail">Rp 2.120.000 · 2 Mar <span class="t-badge t1">T+1</span></div></td>
+        </tr>
+        <tr>
+          <td class="kode">8824</td>
+          <td class="terminal">BNI 08190203 <small>08190203</small></td>
+          <td><span class="type-badge type-DEBIT">DEBIT</span></td>
+          <td class="entitas">CV BERKAT JAYA BAHAGIA</td>
+          <td class="amount zero">—</td><td class="amount zero">—</td><td class="amount zero">—</td><td class="amount zero">—</td><td class="amount zero">—</td>
+          <td class="total zero">—</td><td><div class="status-zero">⊖ Nol</div></td>
+        </tr>
+        <tr>
+          <td class="kode">8824</td>
+          <td class="terminal">BNI 08190203 <small>08190203</small></td>
+          <td><span class="type-badge type-KK">KK</span></td>
+          <td class="entitas">CV BERKAT JAYA BAHAGIA</td>
+          <td class="amount zero">—</td><td class="amount zero">—</td><td class="amount zero">—</td><td class="amount zero">—</td><td class="amount zero">—</td>
+          <td class="total zero">—</td><td><div class="status-zero">⊖ Nol</div></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- CASH EV -->
+    <table>
+      <tbody>
+        <tr class="cash-row">
+          <td style="width:60px" class="kode">—</td>
+          <td style="width:150px;padding-left:16px"><span class="type-badge type-CASH">CASH</span></td>
+          <td style="width:60px"></td><td style="width:150px"></td>
+          <td class="amount filled" style="width:90px;text-align:right">2.740.000</td>
+          <td class="amount zero" style="width:90px;text-align:right">—</td>
+          <td class="amount zero" style="width:90px;text-align:right">—</td>
+          <td class="amount filled" style="width:90px;text-align:right">420.000</td>
+          <td class="amount zero" style="width:90px;text-align:right">—</td>
+          <td class="total" style="width:110px">3.160.000</td>
+          <td style="width:150px"><div class="status-cash">💵 Kas Fisik</div></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- SUBTOTAL EV -->
+    <table>
+      <tbody>
+        <tr class="subtotal-row">
+          <td class="label" style="width:60px"></td>
+          <td class="label" style="padding-left:16px">SUBTOTAL — EV</td>
+          <td style="width:60px"></td><td style="width:150px"></td>
+          <td class="amount-sub" style="width:90px">4.210.000</td>
+          <td class="amount-sub" style="width:90px">0</td>
+          <td class="amount-sub" style="width:90px">0</td>
+          <td class="amount-sub" style="width:90px">2.540.000</td>
+          <td class="amount-sub" style="width:90px">0</td>
+          <td class="amount-sub" style="width:110px">6.750.000</td>
+          <td style="width:150px"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="section-gap"></div>
+
+    <!-- ══════════════════ RINGKASAN KASIR ══════════════════ -->
+    <div class="ringkasan-header">📊 Ringkasan Kasir — REG</div>
+    <div class="ringkasan-subheader">Baris kuning = input manual &nbsp;|&nbsp; Baris hijau = formula otomatis</div>
+
+    <!-- Ringkasan header row -->
+    <div class="ringkasan-row header-row">
+      <div class="ringkasan-cell label"></div>
+      <div class="ringkasan-cell kasir-name" style="text-align:center">SINAR</div>
+      <div class="ringkasan-cell kasir-name" style="text-align:center">MEI</div>
+      <div class="ringkasan-cell kasir-name" style="text-align:center">MITA</div>
+      <div class="ringkasan-cell kasir-name" style="text-align:center">RINDA</div>
+    </div>
+    <div class="ringkasan-row">
+      <div class="ringkasan-cell label">TOTAL SALES (EDC + CASH)</div>
+      <div class="ringkasan-cell highlight-green">5.035.800</div>
+      <div class="ringkasan-cell highlight-green">0</div>
+      <div class="ringkasan-cell highlight-green">22.282.400</div>
+      <div class="ringkasan-cell highlight-green">11.017.700</div>
+    </div>
+    <div class="ringkasan-row">
+      <div class="ringkasan-cell label" style="color:#d97706">TOTAL DI REKAP QUINOS ← input dari sistem POS</div>
+      <div class="ringkasan-cell highlight-yellow">0</div>
+      <div class="ringkasan-cell highlight-yellow">0</div>
+      <div class="ringkasan-cell highlight-yellow">0</div>
+      <div class="ringkasan-cell highlight-yellow">0</div>
+    </div>
+    <div class="ringkasan-row">
+      <div class="ringkasan-cell label" style="color:#d97706">TOTAL DI SETTLEMENT BANK ← jumlah transaksi (bukan Rp)</div>
+      <div class="ringkasan-cell highlight-yellow">0</div>
+      <div class="ringkasan-cell highlight-yellow">0</div>
+      <div class="ringkasan-cell highlight-yellow">0</div>
+      <div class="ringkasan-cell highlight-yellow">0</div>
+    </div>
+    <!-- Bank sub-lines -->
+    <div class="ringkasan-row">
+      <div class="ringkasan-cell bank-label">BCA</div>
+      <div class="ringkasan-cell">1.766.700</div>
+      <div class="ringkasan-cell">0</div>
+      <div class="ringkasan-cell">0</div>
+      <div class="ringkasan-cell">3.000.000</div>
+    </div>
+    <div class="ringkasan-row">
+      <div class="ringkasan-cell bank-label">BNI</div>
+      <div class="ringkasan-cell">0</div>
+      <div class="ringkasan-cell">0</div>
+      <div class="ringkasan-cell">8.331.000</div>
+      <div class="ringkasan-cell">381.200</div>
+    </div>
+    <div class="ringkasan-row">
+      <div class="ringkasan-cell bank-label">BRI</div>
+      <div class="ringkasan-cell">562.700</div>
+      <div class="ringkasan-cell">0</div>
+      <div class="ringkasan-cell">1.639.600</div>
+      <div class="ringkasan-cell">0</div>
+    </div>
+    <div class="ringkasan-row">
+      <div class="ringkasan-cell bank-label">MANDIRI</div>
+      <div class="ringkasan-cell">0</div>
+      <div class="ringkasan-cell">0</div>
+      <div class="ringkasan-cell">7.617.000</div>
+      <div class="ringkasan-cell">5.416.100</div>
+    </div>
+    <div class="ringkasan-row">
+      <div class="ringkasan-cell bank-label">VOUCHER</div>
+      <div class="ringkasan-cell">0</div>
+      <div class="ringkasan-cell">0</div>
+      <div class="ringkasan-cell">0</div>
+      <div class="ringkasan-cell">75.000</div>
+    </div>
+    <div class="ringkasan-row">
+      <div class="ringkasan-cell label">TOTAL CASH</div>
+      <div class="ringkasan-cell total-row">2.706.400</div>
+      <div class="ringkasan-cell total-row">0</div>
+      <div class="ringkasan-cell total-row">4.694.800</div>
+      <div class="ringkasan-cell total-row">2.145.400</div>
+    </div>
+    <div class="ringkasan-row">
+      <div class="ringkasan-cell label" style="font-weight:600">TOTAL PAYMENT (bank + cash)</div>
+      <div class="ringkasan-cell total-row" style="font-weight:700">5.035.800</div>
+      <div class="ringkasan-cell total-row" style="font-weight:700">0</div>
+      <div class="ringkasan-cell total-row" style="font-weight:700">22.282.400</div>
+      <div class="ringkasan-cell total-row" style="font-weight:700">11.017.700</div>
+    </div>
+    <div class="ringkasan-row">
+      <div class="ringkasan-cell label" style="color:#dc2626;font-weight:600">SELISIH (harus = 0)</div>
+      <div class="ringkasan-cell selisih-bad">−5.035.800</div>
+      <div class="ringkasan-cell selisih-ok">0</div>
+      <div class="ringkasan-cell selisih-bad">−22.282.400</div>
+      <div class="ringkasan-cell selisih-bad">−11.017.700</div>
+    </div>
+    <div class="ringkasan-row" style="border-bottom:none">
+      <div class="ringkasan-cell label" style="color:#d97706">TOTAL BILL ← jumlah struk per kasir (angka bulat)</div>
+      <div class="ringkasan-cell highlight-yellow">0</div>
+      <div class="ringkasan-cell highlight-yellow">0</div>
+      <div class="ringkasan-cell highlight-yellow">0</div>
+      <div class="ringkasan-cell highlight-yellow">0</div>
+    </div>
+
+    <div class="section-gap"></div>
+
+    <!-- Mutasi Tak Terduga -->
+    <div class="unexpected-header">
+      <span>⚠ 44 mutasi tak terduga (ada di bank, tidak ada di kasir)</span>
+      <span>Rp 25.200.000</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>BANK</th><th>TANGGAL</th><th class="num">JUMLAH</th><th>DESKRIPSI</th><th>REFERENSI</th><th style="width:130px">TINDAKAN</th>
+      </tr></thead>
+      <tbody>
+        <tr class="unexp-row">
+          <td><span class="badge badge-outline" style="font-size:11px">BCA</span></td>
+          <td style="font-size:11px;color:#64748b">3 Mar <span class="t-badge t1">T+1</span></td>
+          <td class="amount" style="text-align:right;font-weight:600">1.250.000</td>
+          <td style="font-size:11px;color:#475569">KR OTOMATIS TANGGAL :02/03 MID : 8850016932...</td>
+          <td style="font-size:10px;font-family:monospace;color:#94a3b8">BK250302...</td>
+          <td><button class="btn btn-outline" style="font-size:11px;padding:4px 10px">Tindak</button></td>
+        </tr>
+        <tr class="unexp-row">
+          <td><span class="badge badge-outline" style="font-size:11px">BCA</span></td>
+          <td style="font-size:11px;color:#64748b">3 Mar <span class="t-badge t1">T+1</span></td>
+          <td class="amount" style="text-align:right;font-weight:600">3.666.700</td>
+          <td style="font-size:11px;color:#475569">KR OTOMATIS TANGGAL :02/03 MID : 8850016932...</td>
+          <td style="font-size:10px;font-family:monospace;color:#94a3b8">BK250302...</td>
+          <td><button class="btn btn-outline" style="font-size:11px;padding:4px 10px">Tindak</button></td>
+        </tr>
+      </tbody>
+    </table>
+
+  </div><!-- /content-box -->
+</div><!-- /page -->
+</body>
+</html>

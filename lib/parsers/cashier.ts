@@ -173,9 +173,14 @@ export async function parseCashierFile(
     if (rowText.includes('KASIR BERTUGAS')) {
       kasirColMap = new Map()
       // Kasir names live in the POS columns (indices 4–11, cols E–L roughly)
+      // Filter out instruction text like "← Ganti nama kasir di baris ini setiap hari"
       for (let i = 4; i <= 11; i++) {
         const name = cellStr(cells[i]).trim()
-        if (name) {
+        const isValidName = name.length > 0 &&
+          name.length <= 20 &&
+          !name.includes('←') && !name.includes('↑') && !name.includes('→') &&
+          !/GANTI|SETIAP|HARI INI/i.test(name)
+        if (isValidName) {
           kasirColMap.set(i, name)
           if (!allKasirNames.includes(name)) allKasirNames.push(name)
         }
@@ -221,8 +226,9 @@ export async function parseCashierFile(
       return
     }
 
-    // ── VOUCHER row detection ─────────────────────────────────────────────────
-    if (colAStr.includes('VOUCHER') || colBStrUpper.includes('VOUCHER')) {
+    // ── VOUCHER row detection — must also have a valid payment type in col C ──
+    // (prevents RINGKASAN summary rows like "VOUCHER 75000" from being picked up)
+    if ((colAStr.includes('VOUCHER') || colBStrUpper.includes('VOUCHER')) && VALID_PAYMENT_TYPES.has(paymentTypeRaw)) {
       const amount = cellNum(cells[colMap.totalCol])
       const entityNameRaw = colMap.entityCol >= 0 ? (cellStr(cells[colMap.entityCol]) || null) : null
       const notaBill = colMap.notaBillCol >= 0 ? (cellStr(cells[colMap.notaBillCol]) || null) : null
