@@ -309,14 +309,22 @@ export default function SignoffPage() {
           </Link>
           <h1 className="text-xl font-semibold text-slate-800">Tanda Tangan Sesi</h1>
         </div>
-        <div className="flex items-center gap-2 flex-wrap mb-2">
-          <Badge variant="outline" className="font-medium">{session.outlet.name}</Badge>
-          <Badge variant="outline">
-            {new Date(session.sessionDate).toLocaleDateString('id-ID', {
-              day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
-            })}
-          </Badge>
-          {statusBadge(session.status)}
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="outline" className="font-medium">{session.outlet.name}</Badge>
+            <Badge variant="outline">
+              {new Date(session.sessionDate).toLocaleDateString('id-ID', {
+                day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+              })}
+            </Badge>
+            {statusBadge(session.status)}
+          </div>
+          <Link href={`/sessions/${sessionId}/review`}>
+            <Button variant="outline" size="sm" className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50">
+              <Search className="w-3.5 h-3.5" />
+              Lihat Detail Rekonsiliasi
+            </Button>
+          </Link>
         </div>
         {session.submitter && session.submittedAt && (
           <p className="text-xs text-slate-400">
