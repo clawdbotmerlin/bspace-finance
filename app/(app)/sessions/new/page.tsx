@@ -76,7 +76,9 @@ function NewSessionPage() {
     id: String(Date.now() + Math.random()),
     bankName: '', files: [], uploading: false, error: '',
   })
-  const [bankRows, setBankRows] = useState<BankUploadRow[]>([emptyRow()])
+  const [bankRows, setBankRows] = useState<BankUploadRow[]>(
+    ['BCA', 'BNI', 'BRI', 'MANDIRI'].map(name => ({ ...emptyRow(), bankName: name }))
+  )
   const [uploadedBanks, setUploadedBanks] = useState<UploadedBank[]>([])
 
   // Step 3 – matching
