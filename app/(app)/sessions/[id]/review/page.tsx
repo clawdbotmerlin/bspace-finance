@@ -155,7 +155,6 @@ export default function ReviewPage() {
   const [showUploadMutation, setShowUploadMutation] = useState(false)
   const [uploadBank, setUploadBank] = useState('BCA')
   const [uploadFiles, setUploadFiles] = useState<FileList | null>(null)
-  const [uploadAppend, setUploadAppend] = useState(false)
   const [uploadBusy, setUploadBusy] = useState(false)
   const [uploadMsg, setUploadMsg] = useState('')
 
@@ -254,7 +253,7 @@ export default function ReviewPage() {
         const fd = new FormData()
         fd.append('file', uploadFiles[i])
         fd.append('bankName', uploadBank)
-        if (i > 0 || uploadAppend) fd.append('append', 'true')
+        fd.append('append', 'true') // always append — never replace existing mutations
         const res = await fetch(`/api/sessions/${sessionId}/upload/bankmutation`, { method: 'POST', body: fd })
         if (!res.ok) { const d = await res.json(); setUploadMsg(`Gagal: ${d.error ?? 'Upload error'}`); return }
         const d = await res.json()
@@ -566,7 +565,7 @@ export default function ReviewPage() {
               Tambah File Mutasi Bank
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-slate-500 -mt-1">Upload file mutasi tambahan jika ada yang terlewat. Rekonsiliasi akan dijalankan ulang otomatis setelah upload.</p>
+          <p className="text-sm text-slate-500 -mt-1">Upload file mutasi tambahan yang terlewat. Mutasi lama tetap disimpan. Rekonsiliasi akan dijalankan ulang otomatis setelah upload.</p>
           <div className="space-y-4 mt-2">
             <div className="space-y-1.5">
               <Label>Nama Bank</Label>
@@ -592,16 +591,6 @@ export default function ReviewPage() {
               />
               <p className="text-[11px] text-slate-400">Format: .xlsx, .xls, atau .csv — boleh pilih lebih dari 1 file</p>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={uploadAppend}
-                onChange={(e) => setUploadAppend(e.target.checked)}
-                disabled={uploadBusy}
-                className="rounded"
-              />
-              <span className="text-sm text-slate-600">Tambahkan ke data yang sudah ada (jangan hapus mutasi lama untuk bank ini)</span>
-            </label>
             {uploadMsg && (
               <p className={cn('text-sm rounded-lg px-3 py-2', uploadMsg.startsWith('Gagal') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700')}>
                 {uploadMsg}
