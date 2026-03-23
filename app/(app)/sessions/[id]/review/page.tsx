@@ -47,6 +47,8 @@ interface CashierEntryFull {
   notaBill: string | null
   entityNameRaw: string | null
   kasirName: string | null
+  perKasirAmounts: Record<string, number> | null
+  blockType: string
   sourceRow: number | null
   matchStatus: string
   matchedMutationId: string | null
@@ -116,12 +118,13 @@ function bankHeaderBg(name: string): string {
   return 'bg-slate-600'
 }
 
-function BankBadge({ name }: { name: string }) {
-  return (
-    <span className={cn('text-xs font-bold px-2 py-0.5 rounded border', bankBg(name))}>
-      {name}
-    </span>
-  )
+function bankSectionBg(name: string): string {
+  const u = name.toUpperCase()
+  if (u.startsWith('BCA')) return 'bg-blue-50/40'
+  if (u.startsWith('MANDIRI')) return 'bg-yellow-50/40'
+  if (u.startsWith('BNI')) return 'bg-orange-50/40'
+  if (u.startsWith('BRI')) return 'bg-sky-50/40'
+  return 'bg-slate-50/40'
 }
 
 function TypeBadge({ type }: { type: string }) {
@@ -175,6 +178,687 @@ function discTypeLabel(type: string) {
   return map[type] ?? type
 }
 
+function formatAmt(n: number): string {
+  if (n === 0) return '—'
+  return formatRupiah(n)
+}
+
+// ─── Ringkasan Computation ────────────────────────────────────────────────────
+
+type RingkasanRow = {
+  kasir: string
+  totalSales: number
+  cash: number
+  BCA: number
+  BNI: number
+  BRI: number
+  MANDIRI: number
+  VOUCHER: number
+  totalPayment: number
+}
+
+function computeRingkasan(entries: CashierEntryFull[], kasirNames: string[], block: 'REG' | 'EV'): Record<string, RingkasanRow> {
+  const blockEntries = entries.filter((e) => e.blockType === block)
+
+  const result: Record<string, RingkasanRow> = {}
+  for (const kasir of kasirNames) {
+    result[kasir] = { kasir, totalSales: 0, cash: 0, BCA: 0, BNI: 0, BRI: 0, MANDIRI: 0, VOUCHER: 0, totalPayment: 0 }
+  }
+
+  for (const entry of blockEntries) {
+    for (const kasir of kasirNames) {
+      const amt = entry.perKasirAmounts?.[kasir] ?? 0
+      if (amt === 0) continue
+      const row = result[kasir]
+      if (!row) continue
+
+      if (entry.paymentType === 'CASH' || entry.bankName === 'CASH') {
+        row.cash += amt
+        row.totalSales += amt
+      } else if (entry.paymentType === 'VOUCHER' || entry.bankName === 'VOUCHER') {
+        row.VOUCHER += amt
+        row.totalSales += amt
+      } else {
+        const bank = entry.bankName.toUpperCase() as 'BCA' | 'BNI' | 'BRI' | 'MANDIRI'
+        if (bank === 'BCA' || bank === 'BNI' || bank === 'BRI' || bank === 'MANDIRI') {
+          row[bank] += amt
+        }
+        row.totalSales += amt
+      }
+    }
+  }
+
+  for (const kasir of kasirNames) {
+    const row = result[kasir]
+    if (row) row.totalPayment = row.BCA + row.BNI + row.BRI + row.MANDIRI + row.VOUCHER + row.cash
+  }
+
+  return result
+}
+
+// ─── Match Status Cell ────────────────────────────────────────────────────────
+
+function MatchStatusCell({
+  entry, discrepancy, sessionDate, onResolve, readOnly
+}: {
+  entry: CashierEntryFull
+  discrepancy: Discrepancy | null
+  sessionDate: string
+  onResolve: (d: Discrepancy) => void
+  readOnly: boolean
+}) {
+  const isUnmatched = entry.matchStatus === 'unmatched'
+  const isZero = entry.matchStatus === 'zero'
+  const isMismatch = discrepancy?.discrepancyType === 'amount_mismatch'
+  const isResolved = discrepancy?.status === 'resolved'
+  const isCash = entry.paymentType === 'CASH' || entry.bankName === 'CASH'
+  const isVoucher = entry.paymentType === 'VOUCHER' || entry.bankName === 'VOUCHER'
+
+  if (isCash) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
+          <span>💵</span> Kas Fisik
+        </span>
+      </div>
+    )
+  }
+
+  if (isVoucher) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className="flex items-center gap-1 text-[11px] text-amber-600 font-semibold">
+          <span>🎟</span> Voucher
+        </span>
+      </div>
+    )
+  }
+
+  if (isZero) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className="flex items-center gap-1 text-[11px] text-slate-400">
+          <MinusCircle className="w-3.5 h-3.5" /> Nol
+        </span>
+      </div>
+    )
+  }
+
+  if (isUnmatched) {
+    return (
+      <div className="flex flex-col gap-1">
+        {isResolved ? (
+          <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Selesai
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-[11px] text-red-600 font-semibold">
+            <XCircle className="w-3.5 h-3.5" /> Tidak cocok
+          </span>
+        )}
+        {discrepancy && !isResolved && (
+          <Button size="sm" variant="outline" className="text-[11px] h-6 px-2 py-0 w-fit" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
+            Tindak
+          </Button>
+        )}
+        {discrepancy && isResolved && (
+          <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 py-0 w-fit text-slate-400" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
+            Edit
+          </Button>
+        )}
+      </div>
+    )
+  }
+
+  if (isMismatch) {
+    return (
+      <div className="flex flex-col gap-1">
+        {isResolved ? (
+          <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Selesai
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-[11px] text-amber-600 font-semibold">
+            <AlertTriangle className="w-3.5 h-3.5" /> Selisih
+          </span>
+        )}
+        {discrepancy && !isResolved && (
+          <Button size="sm" variant="outline" className="text-[11px] h-6 px-2 py-0 w-fit" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
+            Tindak
+          </Button>
+        )}
+        {discrepancy && isResolved && (
+          <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 py-0 w-fit text-slate-400" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
+            Edit
+          </Button>
+        )}
+      </div>
+    )
+  }
+
+  // Matched
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
+        <CheckCircle2 className="w-3.5 h-3.5" /> Cocok
+      </span>
+      {entry.bankMutation && (
+        <span className="text-[10px] text-slate-400 font-mono">
+          {formatRupiah(entry.bankMutation.grossAmount)} · {new Date(entry.bankMutation.transactionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' })} {settlementBadge(entry.bankMutation.transactionDate, sessionDate)}
+        </span>
+      )}
+    </div>
+  )
+}
+
+// ─── Excel-style Block Section ────────────────────────────────────────────────
+
+function BlockSection({
+  block, entries, kasirNames, discByEntryId, sessionDate, tab,
+  onResolve, readOnly,
+}: {
+  block: 'REG' | 'EV'
+  entries: CashierEntryFull[]
+  kasirNames: string[]
+  discByEntryId: Map<string, Discrepancy>
+  sessionDate: string
+  tab: ReviewTab
+  onResolve: (d: Discrepancy) => void
+  readOnly: boolean
+}) {
+  const blockEntries = entries.filter((e) => e.blockType === block)
+
+  // Apply tab filter
+  const filteredEntries = tab === 'matched'
+    ? blockEntries.filter((e) => e.matchStatus === 'matched')
+    : tab === 'attention'
+      ? blockEntries.filter((e) => e.matchStatus === 'unmatched' || discByEntryId.get(e.id)?.discrepancyType === 'amount_mismatch')
+      : blockEntries
+
+  if (filteredEntries.length === 0) return null
+
+  const blockTotal = filteredEntries.reduce((s, e) => s + Number(e.amount), 0)
+  const edcCount = filteredEntries.filter((e) => e.paymentType !== 'CASH' && e.paymentType !== 'VOUCHER').length
+  const cashCount = filteredEntries.filter((e) => e.paymentType === 'CASH').length
+
+  // Group by bank
+  const edcEntries = filteredEntries.filter((e) => e.paymentType !== 'CASH' && e.paymentType !== 'VOUCHER')
+  const cashEntries = filteredEntries.filter((e) => e.paymentType === 'CASH' || e.bankName === 'CASH')
+  const voucherEntries = filteredEntries.filter((e) => e.paymentType === 'VOUCHER' || e.bankName === 'VOUCHER')
+  const banks = Array.from(new Set(edcEntries.map((e) => e.bankName))).sort()
+
+  const blockIcon = block === 'REG' ? '📋' : '🎪'
+  const blockColor = block === 'REG' ? 'bg-[#1d4ed8]' : 'bg-[#7c3aed]'
+
+  // Build column header style
+  // Cols: KODE | BANK/TERMINAL | JENIS | ENTITAS | [kasir cols] | TOTAL | STATUS BANK
+  const kasirColWidth = 88
+  const fixedLeftCols = '60px 180px 60px 140px'
+  const fixedRightCols = '110px 160px'
+  const kasirColsDef = kasirNames.map(() => `${kasirColWidth}px`).join(' ')
+  const gridTemplate = `${fixedLeftCols} ${kasirColsDef} ${fixedRightCols}`
+
+  return (
+    <div className="mb-4">
+      {/* Block header */}
+      <div className={cn('px-4 py-2.5 rounded-t-lg flex items-center justify-between flex-wrap gap-2', blockColor)}>
+        <div className="flex items-center gap-2">
+          <span className="text-white font-bold text-sm">{blockIcon} {block} — {new Date(sessionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}</span>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-white/80">
+          <span>SUBTOTAL: <span className="font-bold text-white font-mono">{formatRupiah(blockTotal)}</span></span>
+          <span className="text-white/60">{edcCount} entri EDC{cashCount > 0 ? ` + ${cashCount} CASH` : ''}</span>
+        </div>
+      </div>
+
+      <div className="border border-slate-200 rounded-b-lg overflow-hidden">
+        {/* Bank sections */}
+        {banks.map((bank) => {
+          const bankEntries = filteredEntries.filter((e) => e.bankName === bank && e.paymentType !== 'CASH' && e.paymentType !== 'VOUCHER')
+          if (bankEntries.length === 0) return null
+
+          const bankCashierTotal = bankEntries.reduce((s, e) => s + Number(e.amount), 0)
+          const bankCRTotal = bankEntries.reduce((s, e) => s + Number(e.bankMutation?.grossAmount ?? 0), 0)
+          const bankSelisih = bankCRTotal - bankCashierTotal
+
+          return (
+            <div key={bank} className={cn('border-b border-slate-200 last:border-0', bankSectionBg(bank))}>
+              {/* Bank section header */}
+              <div className={cn('px-3 py-2 flex items-center justify-between flex-wrap gap-2 border-b border-slate-200', bankHeaderBg(bank))}>
+                <span className="text-white font-bold text-xs">{bank}</span>
+                <div className="flex items-center gap-4 text-[11px] text-white/80">
+                  <span>Kasir <span className="font-semibold text-white font-mono">{formatRupiah(bankCashierTotal)}</span></span>
+                  <span>Bank CR <span className="font-semibold text-white font-mono">{formatRupiah(bankCRTotal)}</span></span>
+                  <span>Selisih <span className={cn('font-semibold font-mono', Math.abs(Math.round(bankSelisih)) > 0 ? 'text-red-200' : 'text-green-200')}>{formatRupiah(bankSelisih)}</span></span>
+                </div>
+              </div>
+
+              {/* Scrollable table */}
+              <div className="overflow-x-auto">
+                {/* Column headers */}
+                <div
+                  style={{ gridTemplateColumns: gridTemplate, minWidth: `${60 + 180 + 60 + 140 + kasirNames.length * kasirColWidth + 110 + 160 + (6 + kasirNames.length) * 8}px` }}
+                  className="grid gap-2 px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide bg-white/70 border-b border-slate-100"
+                >
+                  <span>KODE</span>
+                  <span>BANK / TERMINAL</span>
+                  <span>JENIS</span>
+                  <span>ENTITAS</span>
+                  {kasirNames.map((k) => (
+                    <span key={k} className="text-right">{k}</span>
+                  ))}
+                  <span className="text-right">TOTAL</span>
+                  <span className="text-right">STATUS BANK</span>
+                </div>
+
+                {/* KASIR BERTUGAS row */}
+                {kasirNames.length > 0 && (
+                  <div
+                    style={{ gridTemplateColumns: gridTemplate, minWidth: `${60 + 180 + 60 + 140 + kasirNames.length * kasirColWidth + 110 + 160 + (6 + kasirNames.length) * 8}px` }}
+                    className="grid gap-2 px-3 py-1 bg-green-50 border-b border-green-100"
+                  >
+                    <span className="text-[10px] text-green-600 font-bold col-span-4">KASIR BERTUGAS</span>
+                    {kasirNames.map((k) => (
+                      <span key={k} className="text-[10px] text-green-700 font-bold text-right">{k}</span>
+                    ))}
+                    <span />
+                    <span />
+                  </div>
+                )}
+
+                {/* Entry rows */}
+                {bankEntries.map((entry) => {
+                  const disc = discByEntryId.get(entry.id) ?? null
+                  const isUnmatched = entry.matchStatus === 'unmatched'
+                  const isMismatch = disc?.discrepancyType === 'amount_mismatch'
+
+                  return (
+                    <div
+                      key={entry.id}
+                      style={{ gridTemplateColumns: gridTemplate, minWidth: `${60 + 180 + 60 + 140 + kasirNames.length * kasirColWidth + 110 + 160 + (6 + kasirNames.length) * 8}px` }}
+                      className={cn(
+                        'grid gap-2 px-3 py-2 text-sm border-b border-slate-100 last:border-0 items-start',
+                        isUnmatched && 'bg-red-50/60',
+                        isMismatch && !isUnmatched && 'bg-amber-50/60',
+                      )}
+                    >
+                      {/* KODE */}
+                      <div>
+                        <span className="text-[11px] font-mono font-semibold text-slate-700">{entry.terminalCode ?? '—'}</span>
+                        {entry.sourceRow && (
+                          <div className="text-[9px] text-slate-400 font-mono">baris {entry.sourceRow}</div>
+                        )}
+                      </div>
+                      {/* BANK/TERMINAL */}
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-800">{entry.bankName}</span>
+                        {entry.terminalId && (
+                          <div className="text-[10px] text-slate-500 font-mono">{entry.terminalId}</div>
+                        )}
+                      </div>
+                      {/* JENIS */}
+                      <div className="pt-0.5">
+                        <TypeBadge type={entry.paymentType} />
+                      </div>
+                      {/* ENTITAS */}
+                      <div>
+                        <span className="text-[11px] text-slate-600">{entry.entityNameRaw ?? '—'}</span>
+                        {entry.notaBill && (
+                          <div className="text-[10px] text-slate-400 font-mono">nota: {entry.notaBill}</div>
+                        )}
+                      </div>
+                      {/* Per-kasir amounts */}
+                      {kasirNames.map((k) => {
+                        const amt = entry.perKasirAmounts?.[k] ?? 0
+                        return (
+                          <div key={k} className="text-right">
+                            {amt > 0 ? (
+                              <span className="text-[11px] font-semibold font-mono text-slate-800">{formatRupiah(amt)}</span>
+                            ) : (
+                              <span className="text-[11px] text-slate-300">—</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                      {/* TOTAL */}
+                      <div className="text-right">
+                        <span className="text-[11px] font-bold font-mono text-slate-800">{formatRupiah(entry.amount)}</span>
+                      </div>
+                      {/* STATUS BANK */}
+                      <div className="flex justify-end">
+                        <MatchStatusCell
+                          entry={entry}
+                          discrepancy={disc}
+                          sessionDate={sessionDate}
+                          onResolve={onResolve}
+                          readOnly={readOnly}
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+
+        {/* CASH rows */}
+        {cashEntries.length > 0 && (
+          <div className="border-b border-slate-200 last:border-0 bg-emerald-50/30">
+            <div className="overflow-x-auto">
+              {cashEntries.map((entry) => {
+                const disc = discByEntryId.get(entry.id) ?? null
+                return (
+                  <div
+                    key={entry.id}
+                    style={{ gridTemplateColumns: gridTemplate, minWidth: `${60 + 180 + 60 + 140 + kasirNames.length * kasirColWidth + 110 + 160 + (6 + kasirNames.length) * 8}px` }}
+                    className="grid gap-2 px-3 py-2 text-sm border-b border-emerald-100 last:border-0 items-start"
+                  >
+                    <div>
+                      <span className="text-[11px] font-mono text-slate-400">—</span>
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-bold text-emerald-700">CASH</span>
+                    </div>
+                    <div className="pt-0.5">
+                      <TypeBadge type="CASH" />
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-slate-600">{entry.entityNameRaw ?? '—'}</span>
+                    </div>
+                    {kasirNames.map((k) => {
+                      const amt = entry.perKasirAmounts?.[k] ?? 0
+                      return (
+                        <div key={k} className="text-right">
+                          {amt > 0 ? (
+                            <span className="text-[11px] font-semibold font-mono text-emerald-700">{formatRupiah(amt)}</span>
+                          ) : (
+                            <span className="text-[11px] text-slate-300">—</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                    <div className="text-right">
+                      <span className="text-[11px] font-bold font-mono text-emerald-700">{formatRupiah(entry.amount)}</span>
+                    </div>
+                    <div className="flex justify-end">
+                      <MatchStatusCell entry={entry} discrepancy={disc} sessionDate={sessionDate} onResolve={onResolve} readOnly={readOnly} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* VOUCHER rows */}
+        {voucherEntries.length > 0 && (
+          <div className="border-b border-slate-200 last:border-0 bg-amber-50/30">
+            <div className="overflow-x-auto">
+              {voucherEntries.map((entry) => {
+                const disc = discByEntryId.get(entry.id) ?? null
+                return (
+                  <div
+                    key={entry.id}
+                    style={{ gridTemplateColumns: gridTemplate, minWidth: `${60 + 180 + 60 + 140 + kasirNames.length * kasirColWidth + 110 + 160 + (6 + kasirNames.length) * 8}px` }}
+                    className="grid gap-2 px-3 py-2 text-sm border-b border-amber-100 last:border-0 items-start"
+                  >
+                    <div>
+                      <span className="text-[11px] font-mono text-slate-400">—</span>
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-bold text-amber-700">VOUCHER</span>
+                    </div>
+                    <div className="pt-0.5">
+                      <TypeBadge type="VOUCHER" />
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-slate-600">{entry.entityNameRaw ?? '—'}</span>
+                    </div>
+                    {kasirNames.map((k) => {
+                      const amt = entry.perKasirAmounts?.[k] ?? 0
+                      return (
+                        <div key={k} className="text-right">
+                          {amt > 0 ? (
+                            <span className="text-[11px] font-semibold font-mono text-amber-700">{formatRupiah(amt)}</span>
+                          ) : (
+                            <span className="text-[11px] text-slate-300">—</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                    <div className="text-right">
+                      <span className="text-[11px] font-bold font-mono text-amber-700">{formatRupiah(entry.amount)}</span>
+                    </div>
+                    <div className="flex justify-end">
+                      <MatchStatusCell entry={entry} discrepancy={disc} sessionDate={sessionDate} onResolve={onResolve} readOnly={readOnly} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* SUBTOTAL row */}
+        <div className="overflow-x-auto">
+          <div
+            style={{ gridTemplateColumns: gridTemplate, minWidth: `${60 + 180 + 60 + 140 + kasirNames.length * kasirColWidth + 110 + 160 + (6 + kasirNames.length) * 8}px` }}
+            className="grid gap-2 px-3 py-2.5 bg-[#1e3a5f] items-center"
+          >
+            <span className="text-white font-bold text-[11px] col-span-4">SUBTOTAL {block}</span>
+            {kasirNames.map((k) => {
+              const total = filteredEntries.reduce((s, e) => s + (e.perKasirAmounts?.[k] ?? 0), 0)
+              return (
+                <div key={k} className="text-right">
+                  <span className="text-[11px] font-bold font-mono text-white">{total > 0 ? formatRupiah(total) : '—'}</span>
+                </div>
+              )
+            })}
+            <div className="text-right">
+              <span className="text-[11px] font-bold font-mono text-white">{formatRupiah(blockTotal)}</span>
+            </div>
+            <span />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Ringkasan Kasir Section ──────────────────────────────────────────────────
+
+function RingkasanSection({
+  block, entries, kasirNames,
+}: {
+  block: 'REG' | 'EV'
+  entries: CashierEntryFull[]
+  kasirNames: string[]
+}) {
+  if (kasirNames.length === 0) return null
+
+  const data = computeRingkasan(entries, kasirNames, block)
+
+  // Grand totals
+  const grandTotal = (key: keyof RingkasanRow) =>
+    kasirNames.reduce((s, k) => s + (Number(data[k]?.[key]) ?? 0), 0)
+
+  const bankHeaderColor = block === 'REG' ? 'bg-[#1d4ed8]' : 'bg-[#7c3aed]'
+
+  const kasirColWidth = 100
+
+  return (
+    <div className="mb-4">
+      {/* Header */}
+      <div className={cn('px-4 py-2 rounded-t-lg flex items-center gap-3', bankHeaderColor)}>
+        <span className="text-white font-bold text-sm">Ringkasan Kasir — {block}</span>
+      </div>
+      <div className="border border-slate-200 rounded-b-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          {/* Column headers */}
+          <div
+            style={{ gridTemplateColumns: `160px ${kasirNames.map(() => `${kasirColWidth}px`).join(' ')} ${kasirColWidth}px`, minWidth: `${160 + (kasirNames.length + 1) * kasirColWidth + (kasirNames.length + 1) * 8}px` }}
+            className="grid gap-2 px-3 py-1.5 text-[10px] font-semibold text-white uppercase tracking-wide bg-[#1e293b]"
+          >
+            <span>KETERANGAN</span>
+            {kasirNames.map((k) => (
+              <span key={k} className="text-right">{k}</span>
+            ))}
+            <span className="text-right">TOTAL</span>
+          </div>
+
+          {/* TOTAL SALES */}
+          <div
+            style={{ gridTemplateColumns: `160px ${kasirNames.map(() => `${kasirColWidth}px`).join(' ')} ${kasirColWidth}px`, minWidth: `${160 + (kasirNames.length + 1) * kasirColWidth + (kasirNames.length + 1) * 8}px` }}
+            className="grid gap-2 px-3 py-2 bg-green-50 border-b border-green-100"
+          >
+            <span className="text-[11px] font-bold text-green-800">TOTAL SALES (EDC+CASH)</span>
+            {kasirNames.map((k) => (
+              <div key={k} className="text-right">
+                <span className="text-[11px] font-semibold font-mono text-green-800">{formatAmt(data[k]?.totalSales ?? 0)}</span>
+              </div>
+            ))}
+            <div className="text-right">
+              <span className="text-[11px] font-bold font-mono text-green-800">{formatAmt(grandTotal('totalSales'))}</span>
+            </div>
+          </div>
+
+          {/* TOTAL DI REKAP QUINOS — manual input, show as — */}
+          <div
+            style={{ gridTemplateColumns: `160px ${kasirNames.map(() => `${kasirColWidth}px`).join(' ')} ${kasirColWidth}px`, minWidth: `${160 + (kasirNames.length + 1) * kasirColWidth + (kasirNames.length + 1) * 8}px` }}
+            className="grid gap-2 px-3 py-2 bg-yellow-50 border-b border-yellow-100"
+          >
+            <span className="text-[11px] font-semibold text-yellow-800">TOTAL DI REKAP QUINOS</span>
+            {kasirNames.map((k) => (
+              <div key={k} className="text-right">
+                <span className="text-[11px] text-yellow-600">—</span>
+              </div>
+            ))}
+            <div className="text-right">
+              <span className="text-[11px] text-yellow-600">—</span>
+            </div>
+          </div>
+
+          {/* TOTAL DI SETTLEMENT BANK — header */}
+          <div
+            style={{ gridTemplateColumns: `160px ${kasirNames.map(() => `${kasirColWidth}px`).join(' ')} ${kasirColWidth}px`, minWidth: `${160 + (kasirNames.length + 1) * kasirColWidth + (kasirNames.length + 1) * 8}px` }}
+            className="grid gap-2 px-3 py-1.5 bg-yellow-50 border-b border-yellow-100"
+          >
+            <span className="text-[11px] font-semibold text-yellow-800">TOTAL DI SETTLEMENT BANK</span>
+            {kasirNames.map((k) => (
+              <div key={k} className="text-right">
+                <span className="text-[11px] text-yellow-600">—</span>
+              </div>
+            ))}
+            <div className="text-right">
+              <span className="text-[11px] text-yellow-600">—</span>
+            </div>
+          </div>
+
+          {/* Per-bank breakdown rows */}
+          {(['BCA', 'BNI', 'BRI', 'MANDIRI'] as const).map((bank) => (
+            <div
+              key={bank}
+              style={{ gridTemplateColumns: `160px ${kasirNames.map(() => `${kasirColWidth}px`).join(' ')} ${kasirColWidth}px`, minWidth: `${160 + (kasirNames.length + 1) * kasirColWidth + (kasirNames.length + 1) * 8}px` }}
+              className="grid gap-2 px-3 py-1.5 bg-yellow-50/60 border-b border-yellow-50"
+            >
+              <span className="text-[11px] text-yellow-700 pl-4">— {bank}</span>
+              {kasirNames.map((k) => (
+                <div key={k} className="text-right">
+                  <span className="text-[11px] text-yellow-600">—</span>
+                </div>
+              ))}
+              <div className="text-right">
+                <span className="text-[11px] text-yellow-600">—</span>
+              </div>
+            </div>
+          ))}
+
+          {/* VOUCHER */}
+          <div
+            style={{ gridTemplateColumns: `160px ${kasirNames.map(() => `${kasirColWidth}px`).join(' ')} ${kasirColWidth}px`, minWidth: `${160 + (kasirNames.length + 1) * kasirColWidth + (kasirNames.length + 1) * 8}px` }}
+            className="grid gap-2 px-3 py-1.5 bg-yellow-50/60 border-b border-yellow-50"
+          >
+            <span className="text-[11px] text-yellow-700 pl-4">— VOUCHER</span>
+            {kasirNames.map((k) => (
+              <div key={k} className="text-right">
+                <span className="text-[11px] text-yellow-600">—</span>
+              </div>
+            ))}
+            <div className="text-right">
+              <span className="text-[11px] text-yellow-600">—</span>
+            </div>
+          </div>
+
+          {/* TOTAL CASH */}
+          <div
+            style={{ gridTemplateColumns: `160px ${kasirNames.map(() => `${kasirColWidth}px`).join(' ')} ${kasirColWidth}px`, minWidth: `${160 + (kasirNames.length + 1) * kasirColWidth + (kasirNames.length + 1) * 8}px` }}
+            className="grid gap-2 px-3 py-2 bg-white border-b border-slate-100"
+          >
+            <span className="text-[11px] font-semibold text-slate-700">TOTAL CASH</span>
+            {kasirNames.map((k) => (
+              <div key={k} className="text-right">
+                <span className="text-[11px] font-semibold font-mono text-slate-700">{formatAmt(data[k]?.cash ?? 0)}</span>
+              </div>
+            ))}
+            <div className="text-right">
+              <span className="text-[11px] font-bold font-mono text-slate-700">{formatAmt(grandTotal('cash'))}</span>
+            </div>
+          </div>
+
+          {/* TOTAL PAYMENT */}
+          <div
+            style={{ gridTemplateColumns: `160px ${kasirNames.map(() => `${kasirColWidth}px`).join(' ')} ${kasirColWidth}px`, minWidth: `${160 + (kasirNames.length + 1) * kasirColWidth + (kasirNames.length + 1) * 8}px` }}
+            className="grid gap-2 px-3 py-2 bg-white border-b border-slate-200"
+          >
+            <span className="text-[11px] font-bold text-slate-800">TOTAL PAYMENT</span>
+            {kasirNames.map((k) => (
+              <div key={k} className="text-right">
+                <span className="text-[11px] font-bold font-mono text-slate-800">{formatAmt(data[k]?.totalPayment ?? 0)}</span>
+              </div>
+            ))}
+            <div className="text-right">
+              <span className="text-[11px] font-bold font-mono text-slate-800">{formatAmt(grandTotal('totalPayment'))}</span>
+            </div>
+          </div>
+
+          {/* SELISIH — show — since we don't have QUINOS data */}
+          <div
+            style={{ gridTemplateColumns: `160px ${kasirNames.map(() => `${kasirColWidth}px`).join(' ')} ${kasirColWidth}px`, minWidth: `${160 + (kasirNames.length + 1) * kasirColWidth + (kasirNames.length + 1) * 8}px` }}
+            className="grid gap-2 px-3 py-2 bg-slate-50 border-b border-slate-100"
+          >
+            <span className="text-[11px] font-bold text-slate-600">SELISIH</span>
+            {kasirNames.map((k) => (
+              <div key={k} className="text-right">
+                <span className="text-[11px] text-slate-400">—</span>
+              </div>
+            ))}
+            <div className="text-right">
+              <span className="text-[11px] text-slate-400">—</span>
+            </div>
+          </div>
+
+          {/* TOTAL BILL */}
+          <div
+            style={{ gridTemplateColumns: `160px ${kasirNames.map(() => `${kasirColWidth}px`).join(' ')} ${kasirColWidth}px`, minWidth: `${160 + (kasirNames.length + 1) * kasirColWidth + (kasirNames.length + 1) * 8}px` }}
+            className="grid gap-2 px-3 py-2 bg-yellow-50"
+          >
+            <span className="text-[11px] font-semibold text-yellow-800">TOTAL BILL</span>
+            {kasirNames.map((k) => (
+              <div key={k} className="text-right">
+                <span className="text-[11px] text-yellow-600">—</span>
+              </div>
+            ))}
+            <div className="text-right">
+              <span className="text-[11px] text-yellow-600">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function ReviewPage() {
@@ -185,6 +869,7 @@ export default function ReviewPage() {
   const [entries, setEntries] = useState<CashierEntryFull[]>([])
   const [unexpected, setUnexpected] = useState<UnexpectedMutation[]>([])
   const [summary, setSummary] = useState<MatchSummary | null>(null)
+  const [kasirNames, setKasirNames] = useState<string[]>([])
   const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -202,18 +887,6 @@ export default function ReviewPage() {
     () => new Map(discrepancies.filter((d) => d.bankMutationId).map((d) => [d.bankMutationId!, d])),
     [discrepancies],
   )
-
-  // Build batch groups: mutationId → entries that share it
-  const batchMap = useMemo(() => {
-    const m = new Map<string, CashierEntryFull[]>()
-    entries.forEach((e) => {
-      if (e.matchedMutationId) {
-        if (!m.has(e.matchedMutationId)) m.set(e.matchedMutationId, [])
-        m.get(e.matchedMutationId)!.push(e)
-      }
-    })
-    return m
-  }, [entries])
 
   async function fetchAll() {
     setLoading(true)
@@ -234,6 +907,7 @@ export default function ReviewPage() {
       setEntries(mData.entries ?? [])
       setUnexpected(mData.unexpectedMutations ?? [])
       setSummary(mData.summary ?? null)
+      setKasirNames(mData.kasirNames ?? [])
       setDiscrepancies(dData)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Terjadi kesalahan.')
@@ -312,16 +986,7 @@ export default function ReviewPage() {
   const needsAttentionCount = needsAttentionEntries.length + unexpected.length
   const openDiscCount = discrepancies.filter((d) => d.status === 'open').length
 
-  const visibleEntries = tab === 'matched'
-    ? entries.filter((e) => e.matchStatus === 'matched')
-    : tab === 'attention'
-      ? needsAttentionEntries
-      : entries
-
   const showUnexpected = tab === 'all' || tab === 'attention'
-
-  // Group: bank → terminal
-  const banks = Array.from(new Set(visibleEntries.map((e) => e.bankName))).sort()
   const unexpectedBanks = showUnexpected
     ? Array.from(new Set(unexpected.map((m) => m.bankName))).sort()
     : []
@@ -332,8 +997,12 @@ export default function ReviewPage() {
     { id: 'matched', label: 'Cocok Saja', count: entries.filter((e) => e.matchStatus === 'matched').length },
   ]
 
+  // Check if both blocks have entries
+  const hasReg = entries.some((e) => e.blockType === 'REG')
+  const hasEv = entries.some((e) => e.blockType === 'EV')
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 max-w-[1400px] mx-auto">
       {/* ── Header ── */}
       <div className="mb-5">
         <div className="flex items-center gap-2 mb-2">
@@ -398,147 +1067,95 @@ export default function ReviewPage() {
           ))}
         </div>
 
-        {visibleEntries.length === 0 && (!showUnexpected || unexpected.length === 0) ? (
-          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-            <CheckCircle2 className="w-8 h-8 mb-2 opacity-30" />
-            <p className="text-sm">Tidak ada entri untuk ditampilkan.</p>
-          </div>
-        ) : (
-          <div>
-            {/* ── Bank sections ── */}
-            {banks.map((bank) => {
-              const bankEntries = visibleEntries.filter((e) => e.bankName === bank)
-              if (bankEntries.length === 0) return null
+        <div className="p-4">
+          {entries.length === 0 && (!showUnexpected || unexpected.length === 0) ? (
+            <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+              <CheckCircle2 className="w-8 h-8 mb-2 opacity-30" />
+              <p className="text-sm">Tidak ada entri untuk ditampilkan.</p>
+            </div>
+          ) : (
+            <>
+              {/* ── REG Block ── */}
+              {hasReg && (
+                <BlockSection
+                  block="REG"
+                  entries={entries}
+                  kasirNames={kasirNames}
+                  discByEntryId={discByEntryId}
+                  sessionDate={session.sessionDate}
+                  tab={tab}
+                  onResolve={setResolveTarget}
+                  readOnly={isReadOnly}
+                />
+              )}
 
-              // Sub-group by terminal
-              const terminals = Array.from(new Set(bankEntries.map((e) => e.terminalCode ?? '__none__'))).sort()
+              {/* ── EV Block ── */}
+              {hasEv && (
+                <BlockSection
+                  block="EV"
+                  entries={entries}
+                  kasirNames={kasirNames}
+                  discByEntryId={discByEntryId}
+                  sessionDate={session.sessionDate}
+                  tab={tab}
+                  onResolve={setResolveTarget}
+                  readOnly={isReadOnly}
+                />
+              )}
 
-              const cashierBankTotal = bankEntries.reduce((s, e) => s + Number(e.amount), 0)
-              const bankCRTotal = bankEntries.reduce((s, e) => s + Number(e.bankMutation?.grossAmount ?? 0), 0)
-              const bankSelisih = bankCRTotal - cashierBankTotal
+              {/* ── Ringkasan Kasir ── */}
+              {kasirNames.length > 0 && tab === 'all' && (
+                <>
+                  {hasReg && (
+                    <RingkasanSection block="REG" entries={entries} kasirNames={kasirNames} />
+                  )}
+                  {hasEv && (
+                    <RingkasanSection block="EV" entries={entries} kasirNames={kasirNames} />
+                  )}
+                </>
+              )}
 
-              return (
-                <div key={bank} className="border-b border-slate-200 last:border-0">
-                  {/* Bank header */}
-                  <div className={cn('px-4 py-2.5 flex items-center justify-between flex-wrap gap-2', bankHeaderBg(bank))}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-bold text-sm">{bank}</span>
-                      <span className="text-white/70 text-xs">{bankEntries.length} entri</span>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-white/80">
-                      <span>Kasir <span className="font-semibold text-white font-mono">{formatRupiah(cashierBankTotal)}</span></span>
-                      <span>Bank CR <span className="font-semibold text-white font-mono">{formatRupiah(bankCRTotal)}</span></span>
-                      <span>Selisih <span className={cn('font-semibold font-mono', Math.abs(Math.round(bankSelisih)) > 0 ? 'text-red-200' : 'text-green-200')}>{formatRupiah(bankSelisih)}</span></span>
-                    </div>
+              {/* ── Unexpected bank mutations ── */}
+              {showUnexpected && unexpectedBanks.length > 0 && (
+                <div className="mt-4">
+                  <div className="bg-[#7c2d12] text-white px-4 py-2 rounded-t-lg">
+                    <span className="font-bold text-sm">Mutasi Tak Terduga</span>
+                    <span className="text-white/70 text-xs ml-2">{unexpected.length} entri bank tanpa pasangan di kasir</span>
                   </div>
+                  <div className="border border-slate-200 rounded-b-lg overflow-hidden">
+                    {unexpectedBanks.map((bank) => {
+                      const bankMuts = unexpected.filter((m) => m.bankName === bank)
+                      if (bankMuts.length === 0) return null
+                      const unexpectedTotal = bankMuts.reduce((s, m) => s + Number(m.grossAmount), 0)
 
-                  {/* Terminal sub-sections */}
-                  {terminals.map((termKey) => {
-                    const termCode = termKey === '__none__' ? null : termKey
-                    const termEntries = bankEntries.filter((e) => (e.terminalCode ?? '__none__') === termKey)
-                    const termCashierTotal = termEntries.reduce((s, e) => s + Number(e.amount), 0)
-                    const termBankTotal = termEntries.reduce((s, e) => s + Number(e.bankMutation?.grossAmount ?? 0), 0)
-                    const termSelisih = termBankTotal - termCashierTotal
-                    const termMatchedCount = termEntries.filter((e) => e.matchStatus === 'matched').length
-                    const termHasIssue = termEntries.some((e) => e.matchStatus === 'unmatched' || discByEntryId.get(e.id)?.discrepancyType === 'amount_mismatch')
-
-                    return (
-                      <div key={termKey} className="border-b border-slate-100 last:border-0">
-                        {/* Terminal header */}
-                        <div className={cn(
-                          'px-4 py-1.5 flex items-center justify-between flex-wrap gap-2 border-b border-slate-100',
-                          termHasIssue ? 'bg-red-50' : 'bg-slate-50',
-                        )}>
-                          <div className="flex items-center gap-2">
-                            <span className={cn('text-xs font-bold font-mono', termHasIssue ? 'text-red-700' : 'text-slate-700')}>
-                              {termCode ?? '—'}
-                            </span>
-                            {termHasIssue && (
-                              <span className="text-[11px] font-semibold text-red-600 flex items-center gap-1">
-                                <AlertCircle className="w-3 h-3" /> UNMATCHED
-                              </span>
-                            )}
-                            <span className="text-[11px] text-slate-400">
-                              {termMatchedCount}/{termEntries.length} cocok
-                            </span>
+                      return (
+                        <div key={`unexp-${bank}`} className="border-b border-slate-200 last:border-0">
+                          <div className="px-4 py-2 bg-orange-50 border-b border-orange-100 flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className={cn('text-xs font-bold px-2 py-0.5 rounded border', bankBg(bank))}>{bank}</span>
+                              <span className="text-xs text-orange-600 font-semibold">{bankMuts.length} mutasi tak terduga</span>
+                            </div>
+                            <span className="text-xs text-orange-700 font-mono font-semibold">{formatRupiah(unexpectedTotal)}</span>
                           </div>
-                          <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                            <span>Kasir <span className="font-mono font-semibold text-slate-600">{formatRupiah(termCashierTotal)}</span></span>
-                            <span>Bank CR <span className="font-mono font-semibold text-slate-600">{formatRupiah(termBankTotal)}</span></span>
-                            <span>Selisih <span className={cn('font-mono font-semibold', Math.abs(Math.round(termSelisih)) > 0 ? 'text-red-600' : 'text-emerald-600')}>{formatRupiah(termSelisih)}</span></span>
-                          </div>
-                        </div>
-
-                        {/* Column labels */}
-                        <div className="grid grid-cols-[52px_1fr_12px_1fr_120px] gap-2 px-4 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wide bg-white">
-                          <span>Tipe</span>
-                          <span>Entri Kasir</span>
-                          <span />
-                          <span>Mutasi Bank</span>
-                          <span className="text-right">Status</span>
-                        </div>
-
-                        {termEntries.map((entry, idx) => {
-                          const disc = discByEntryId.get(entry.id) ?? null
-                          const batchPeers = entry.matchedMutationId ? (batchMap.get(entry.matchedMutationId) ?? []) : []
-                          const isBatched = batchPeers.length > 1
-                          const batchIndex = isBatched ? batchPeers.findIndex((p) => p.id === entry.id) : -1
-                          const isFirstInBatch = batchIndex === 0
-                          const isSecondOrLater = batchIndex > 0
-
-                          return (
-                            <EntryRow
-                              key={entry.id}
-                              entry={entry}
-                              discrepancy={disc}
+                          {bankMuts.map((mut) => (
+                            <UnexpectedRow
+                              key={mut.id}
+                              mutation={mut}
+                              discrepancy={discByMutationId.get(mut.id) ?? null}
                               sessionDate={session.sessionDate}
-                              isBatched={isBatched}
-                              isFirstInBatch={isFirstInBatch}
-                              isSecondOrLater={isSecondOrLater}
-                              batchPeers={batchPeers}
                               onResolve={setResolveTarget}
                               readOnly={isReadOnly}
-                              isLast={idx === termEntries.length - 1}
                             />
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })}
-
-            {/* ── Unexpected bank mutations ── */}
-            {showUnexpected && unexpectedBanks.map((bank) => {
-              const bankMuts = unexpected.filter((m) => m.bankName === bank)
-              if (bankMuts.length === 0) return null
-              const unexpectedTotal = bankMuts.reduce((s, m) => s + Number(m.grossAmount), 0)
-
-              return (
-                <div key={`unexp-${bank}`} className="border-b border-slate-200 last:border-0">
-                  <div className="px-4 py-2 bg-orange-50 border-b border-orange-100 flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <BankBadge name={bank} />
-                      <span className="text-xs text-orange-600 font-semibold">{bankMuts.length} mutasi tak terduga</span>
-                    </div>
-                    <span className="text-xs text-orange-700 font-mono font-semibold">{formatRupiah(unexpectedTotal)}</span>
+                          ))}
+                        </div>
+                      )
+                    })}
                   </div>
-                  {bankMuts.map((mut) => (
-                    <UnexpectedRow
-                      key={mut.id}
-                      mutation={mut}
-                      discrepancy={discByMutationId.get(mut.id) ?? null}
-                      sessionDate={session.sessionDate}
-                      onResolve={setResolveTarget}
-                      readOnly={isReadOnly}
-                    />
-                  ))}
                 </div>
-              )
-            })}
-          </div>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* ── Dialogs ── */}
@@ -562,199 +1179,6 @@ export default function ReviewPage() {
   )
 }
 
-// ─── Entry Row ────────────────────────────────────────────────────────────────
-
-function EntryRow({
-  entry, discrepancy, sessionDate,
-  isBatched, isFirstInBatch, isSecondOrLater, batchPeers,
-  onResolve, readOnly, isLast,
-}: {
-  entry: CashierEntryFull
-  discrepancy: Discrepancy | null
-  sessionDate: string
-  isBatched: boolean
-  isFirstInBatch: boolean
-  isSecondOrLater: boolean
-  batchPeers: CashierEntryFull[]
-  onResolve: (d: Discrepancy) => void
-  readOnly: boolean
-  isLast: boolean
-}) {
-  const isUnmatched = entry.matchStatus === 'unmatched'
-  const isZero = entry.matchStatus === 'zero'
-  const isMismatch = discrepancy?.discrepancyType === 'amount_mismatch'
-  const isResolved = discrepancy?.status === 'resolved'
-  const amountDiff = entry.bankMutation
-    ? Number(entry.bankMutation.grossAmount) - Number(entry.amount)
-    : 0
-
-  return (
-    <div className={cn(
-      'grid grid-cols-[52px_1fr_12px_1fr_120px] gap-2 px-4 py-2.5 items-start text-sm border-b border-slate-50',
-      isLast && 'border-0',
-      isUnmatched && 'bg-red-50/40',
-      isMismatch && 'bg-amber-50/40',
-      isZero && 'bg-slate-50/60',
-      isSecondOrLater && 'bg-blue-50/20',
-    )}>
-      {/* Type badge */}
-      <div className="flex flex-col items-start gap-1 pt-0.5">
-        <TypeBadge type={entry.paymentType} />
-        {entry.sourceRow && (
-          <span className="text-[9px] text-slate-400 font-mono">baris {entry.sourceRow}</span>
-        )}
-      </div>
-
-      {/* Cashier side — always show all data from file */}
-      <div className="min-w-0">
-        <div className="flex items-baseline gap-1.5">
-          <span className={cn('font-mono font-semibold tabular-nums', isZero ? 'text-slate-400' : 'text-slate-800')}>
-            {formatRupiah(entry.amount)}
-          </span>
-        </div>
-        {/* Terminal: bankName + terminalId */}
-        <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-          {entry.bankName}{entry.terminalId ? ` ${entry.terminalId}` : ''}
-        </p>
-        {entry.kasirName && (
-          <p className="text-[11px] text-slate-700 mt-0.5 flex items-center gap-1">
-            <span className="text-[9px] text-slate-400 uppercase font-semibold tracking-wide">kasir</span>
-            {entry.kasirName}
-          </p>
-        )}
-        {entry.entityNameRaw && (
-          <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
-            <span className="text-[9px] text-slate-400 uppercase font-semibold tracking-wide">entitas</span>
-            {entry.entityNameRaw}
-          </p>
-        )}
-        {entry.notaBill && (
-          <p className="text-[10px] text-slate-400 font-mono mt-0.5">nota: {entry.notaBill}</p>
-        )}
-        {/* Batch annotation */}
-        {isBatched && isFirstInBatch && batchPeers[1] && (
-          <p className="text-[10px] text-blue-600 mt-0.5">
-            → digabung dengan {batchPeers[1].paymentType} di bawah
-          </p>
-        )}
-        {isBatched && isSecondOrLater && (
-          <p className="text-[10px] text-blue-600 mt-0.5">
-            ↑ baris bank yang sama
-          </p>
-        )}
-      </div>
-
-      {/* Center divider */}
-      <div className="flex items-center justify-center pt-1">
-        {isUnmatched
-          ? <XCircle className="w-3 h-3 text-red-400" />
-          : isZero
-            ? <MinusCircle className="w-3 h-3 text-slate-300" />
-            : <span className="text-slate-300 text-xs">⇄</span>}
-      </div>
-
-      {/* Bank side — only render when a bank mutation is actually linked */}
-      <div className="min-w-0">
-        {entry.bankMutation ? (
-          <>
-            <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="font-mono font-semibold text-slate-800 tabular-nums">
-                {formatRupiah(entry.bankMutation.grossAmount)}
-              </span>
-              {Math.abs(Math.round(amountDiff)) > 0 && (
-                <span className="text-[11px] font-mono text-amber-600">
-                  ({amountDiff > 0 ? '+' : ''}{formatRupiah(amountDiff)})
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-              <span className="text-[11px] text-slate-500">
-                {new Date(entry.bankMutation.transactionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' })}
-              </span>
-              {settlementBadge(entry.bankMutation.transactionDate, sessionDate)}
-              {isBatched && isSecondOrLater && (
-                <span className="text-[10px] text-blue-600 font-medium">Baris bank sama ({formatRupiah(entry.bankMutation.grossAmount)})</span>
-              )}
-            </div>
-            {entry.bankMutation.description && (
-              <p className="text-[11px] text-slate-500 mt-0.5 truncate max-w-[280px]">{entry.bankMutation.description}</p>
-            )}
-            {isBatched && isFirstInBatch && batchPeers.length > 1 && (
-              <p className="text-[10px] text-blue-600 mt-0.5">
-                1 baris bank = {batchPeers.map((p) => `${p.paymentType} (${formatRupiah(p.amount)})`).join(' + ')}
-              </p>
-            )}
-            {entry.bankMutation.referenceNo && (
-              <p className="text-[11px] text-slate-400 font-mono mt-0.5">{entry.bankMutation.referenceNo}</p>
-            )}
-          </>
-        ) : null}
-      </div>
-
-      {/* Status + action */}
-      <div className="flex flex-col items-end gap-1 pt-0.5">
-        {isZero ? (
-          <span className="flex items-center gap-1 text-[11px] text-slate-400">
-            <MinusCircle className="w-3.5 h-3.5" /> Nol
-          </span>
-        ) : isUnmatched ? (
-          <>
-            {isResolved ? (
-              <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Diselesaikan
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-[11px] text-red-600 font-semibold">
-                <XCircle className="w-3.5 h-3.5" /> Tidak cocok
-              </span>
-            )}
-            {discrepancy && !isResolved && (
-              <Button size="sm" variant="outline" className="text-[11px] h-6 px-2 py-0" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
-                Tindak
-              </Button>
-            )}
-            {discrepancy && isResolved && (
-              <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 py-0 text-slate-400" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
-                Edit
-              </Button>
-            )}
-          </>
-        ) : isMismatch ? (
-          <>
-            {isResolved ? (
-              <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Diselesaikan
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-[11px] text-amber-600 font-semibold">
-                <AlertTriangle className="w-3.5 h-3.5" /> Selisih
-              </span>
-            )}
-            {discrepancy && !isResolved && (
-              <Button size="sm" variant="outline" className="text-[11px] h-6 px-2 py-0" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
-                Tindak
-              </Button>
-            )}
-            {discrepancy && isResolved && (
-              <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 py-0 text-slate-400" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
-                Edit
-              </Button>
-            )}
-          </>
-        ) : isBatched ? (
-          <span className="text-[11px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-            Batch
-          </span>
-        ) : (
-          <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Cocok
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ─── Unexpected Row ──────────────────────────────────────────────────────────
 
 function UnexpectedRow({ mutation, discrepancy, sessionDate, onResolve, readOnly }: {
@@ -764,6 +1188,7 @@ function UnexpectedRow({ mutation, discrepancy, sessionDate, onResolve, readOnly
   onResolve: (d: Discrepancy) => void
   readOnly: boolean
 }) {
+  const isResolved = discrepancy?.status === 'resolved'
   return (
     <div className="grid grid-cols-[1fr_auto] gap-2 px-4 py-2.5 items-start text-sm border-b border-orange-50 last:border-0 bg-orange-50/20">
       <div className="min-w-0">
@@ -783,12 +1208,23 @@ function UnexpectedRow({ mutation, discrepancy, sessionDate, onResolve, readOnly
         </div>
       </div>
       <div className="flex flex-col items-end gap-1">
-        <span className="flex items-center gap-1 text-[11px] text-orange-600 font-semibold">
-          <AlertCircle className="w-3.5 h-3.5" /> Tak terduga
-        </span>
-        {discrepancy && (
+        {isResolved ? (
+          <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Selesai
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-[11px] text-orange-600 font-semibold">
+            <AlertCircle className="w-3.5 h-3.5" /> Tak terduga
+          </span>
+        )}
+        {discrepancy && !isResolved && (
           <Button size="sm" variant="outline" className="text-[11px] h-6 px-2 py-0" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
             Tindak
+          </Button>
+        )}
+        {discrepancy && isResolved && (
+          <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 py-0 text-slate-400" onClick={() => onResolve(discrepancy)} disabled={readOnly}>
+            Edit
           </Button>
         )}
       </div>
@@ -826,18 +1262,18 @@ function ResolveDialog({ discrepancy, open, onClose, onSaved }: {
   const [status, setStatus] = useState(discrepancy.status)
   const [resolutionNotes, setResolutionNotes] = useState(discrepancy.resolutionNotes ?? '')
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     setStatus(discrepancy.status)
     setResolutionNotes(discrepancy.resolutionNotes ?? '')
-    setError('')
+    setSaveError('')
   }, [discrepancy])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    setError('')
+    setSaveError('')
     try {
       const res = await fetch(`/api/sessions/${discrepancy.sessionId}/discrepancies/${discrepancy.id}`, {
         method: 'PUT',
@@ -845,7 +1281,7 @@ function ResolveDialog({ discrepancy, open, onClose, onSaved }: {
         body: JSON.stringify({ status, resolutionNotes }),
       })
       if (res.ok) { onSaved(await res.json()) }
-      else { const d = await res.json(); setError(d.error ?? 'Gagal menyimpan.') }
+      else { const d = await res.json(); setSaveError(d.error ?? 'Gagal menyimpan.') }
     } finally { setSaving(false) }
   }
 
@@ -883,7 +1319,7 @@ function ResolveDialog({ discrepancy, open, onClose, onSaved }: {
               placeholder="Jelaskan alasan atau tindakan yang diambil..."
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y" />
           </div>
-          {error && <ErrorMsg msg={error} />}
+          {saveError && <ErrorMsg msg={saveError} />}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Batal</Button>
             <Button type="submit" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</Button>

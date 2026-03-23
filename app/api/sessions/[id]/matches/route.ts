@@ -7,6 +7,7 @@ export const GET = withAuth(async (req: NextRequest) => {
 
   const session = await prisma.reconciliationSession.findUnique({
     where: { id: sessionId },
+    select: { kasirNames: true, sessionDate: true, id: true, status: true },
   })
   if (!session) return NextResponse.json({ error: 'Sesi tidak ditemukan.' }, { status: 404 })
 
@@ -23,11 +24,13 @@ export const GET = withAuth(async (req: NextRequest) => {
       notaBill: true,
       entityNameRaw: true,
       kasirName: true,
+      blockType: true,
+      perKasirAmounts: true,
       sourceRow: true,
       matchStatus: true,
       matchedMutationId: true,
     },
-    orderBy: [{ bankName: 'asc' }, { terminalCode: 'asc' }, { paymentType: 'asc' }, { createdAt: 'asc' }],
+    orderBy: [{ blockType: 'asc' }, { bankName: 'asc' }, { terminalCode: 'asc' }, { paymentType: 'asc' }, { createdAt: 'asc' }],
   })
 
   // Batch fetch linked bank mutations for matched entries
@@ -89,6 +92,7 @@ export const GET = withAuth(async (req: NextRequest) => {
   return NextResponse.json({
     entries: entriesWithMutation,
     unexpectedMutations,
+    kasirNames: (session.kasirNames as string[]) ?? [],
     summary: {
       cashierTotal,
       matchedAmount,

@@ -13,6 +13,7 @@ export interface ParsedCashierEntry {
   kasirName: string | null   // from KASIR BERTUGAS header row (v3 template)
   blockType: 'REG' | 'EV'   // auto-detected from section header
   sourceRow: number          // 1-based row number in the Excel sheet
+  perKasirAmounts: Record<string, number>  // per-kasir breakdown
 }
 
 export interface CashierParseResult {
@@ -20,6 +21,7 @@ export interface CashierParseResult {
   skipped: number
   errors: string[]
   sheetFound: boolean
+  kasirNames: string[]   // unique kasir names across all blocks
 }
 
 function cellStr(value: ExcelJS.CellValue): string {
@@ -91,6 +93,14 @@ function parseBankCol(colB: string, colA: string): { bankName: string; terminalI
   return { bankName: firstToken, terminalId }
 }
 
+function buildPerKasirAmounts(cells: (ExcelJS.CellValue | null)[], kasirColMap: Map<number, string>): Record<string, number> {
+  const result: Record<string, number> = {}
+  kasirColMap.forEach((name, colIdx) => {
+    result[name] = cellNum(cells[colIdx])
+  })
+  return result
+}
+
 export async function parseCashierFile(
   buffer: ArrayBuffer,
   sessionDate: Date,
@@ -102,12 +112,13 @@ export async function parseCashierFile(
   const dayKey = String(sessionDate.getUTCDate()).padStart(2, '0')
   const sheet = workbook.getWorksheet(dayKey)
   if (!sheet) {
-    return { entries: [], skipped: 0, errors: [`Sheet "${dayKey}" tidak ditemukan dalam file.`], sheetFound: false }
+    return { entries: [], skipped: 0, errors: [`Sheet "${dayKey}" tidak ditemukan dalam file.`], sheetFound: false, kasirNames: [] }
   }
 
   const entries: ParsedCashierEntry[] = []
   const errors: string[] = []
   let skipped = 0
+  const allKasirNames: string[] = []
 
   // State machine
   let currentBlock: 'REG' | 'EV' | null = null
@@ -164,23 +175,91 @@ export async function parseCashierFile(
       // Kasir names live in the POS columns (indices 4–11, cols E–L roughly)
       for (let i = 4; i <= 11; i++) {
         const name = cellStr(cells[i]).trim()
-        if (name) kasirColMap.set(i, name)
+        if (name) {
+          kasirColMap.set(i, name)
+          if (!allKasirNames.includes(name)) allKasirNames.push(name)
+        }
       }
       skipped++
       return
     }
 
+    // ── CASH row detection (BEFORE payment type filter) ─────────────────────
+    const colAStr = cellStr(cells[0]).toUpperCase().trim()
+    const colBStr = cellStr(cells[1])
+    const colBStrUpper = colBStr.toUpperCase().trim()
+    const paymentTypeRaw = cellStr(cells[2]).toUpperCase()
+
+    if (colAStr === 'CASH' || colBStrUpper === 'CASH') {
+      const amount = cellNum(cells[colMap.totalCol])
+      const entityNameRaw = colMap.entityCol >= 0 ? (cellStr(cells[colMap.entityCol]) || null) : null
+      const notaBill = colMap.notaBillCol >= 0 ? (cellStr(cells[colMap.notaBillCol]) || null) : null
+      const perKasirAmounts = buildPerKasirAmounts(cells, kasirColMap)
+
+      let kasirName: string | null = null
+      if (kasirColMap.size > 0) {
+        const names: string[] = []
+        kasirColMap.forEach((name, colIdx) => {
+          if (cellNum(cells[colIdx]) > 0) names.push(name)
+        })
+        kasirName = names.length > 0 ? names.join(' / ') : null
+      }
+
+      entries.push({
+        terminalCode: null,
+        bankName: 'CASH',
+        terminalId: null,
+        paymentType: 'CASH',
+        amount,
+        notaBill,
+        entityNameRaw,
+        kasirName,
+        blockType: currentBlock!,
+        sourceRow: rowNum,
+        perKasirAmounts,
+      })
+      return
+    }
+
+    // ── VOUCHER row detection ─────────────────────────────────────────────────
+    if (colAStr.includes('VOUCHER') || colBStrUpper.includes('VOUCHER')) {
+      const amount = cellNum(cells[colMap.totalCol])
+      const entityNameRaw = colMap.entityCol >= 0 ? (cellStr(cells[colMap.entityCol]) || null) : null
+      const notaBill = colMap.notaBillCol >= 0 ? (cellStr(cells[colMap.notaBillCol]) || null) : null
+      const perKasirAmounts = buildPerKasirAmounts(cells, kasirColMap)
+
+      let kasirName: string | null = null
+      if (kasirColMap.size > 0) {
+        const names: string[] = []
+        kasirColMap.forEach((name, colIdx) => {
+          if (cellNum(cells[colIdx]) > 0) names.push(name)
+        })
+        kasirName = names.length > 0 ? names.join(' / ') : null
+      }
+
+      entries.push({
+        terminalCode: null,
+        bankName: 'VOUCHER',
+        terminalId: null,
+        paymentType: 'VOUCHER',
+        amount,
+        notaBill,
+        entityNameRaw,
+        kasirName,
+        blockType: currentBlock!,
+        sourceRow: rowNum,
+        perKasirAmounts,
+      })
+      return
+    }
+
     // ── Payment type filter ──────────────────────────────────────────────────
-    const paymentType = cellStr(cells[2]).toUpperCase()
-    if (!VALID_PAYMENT_TYPES.has(paymentType)) {
+    if (!VALID_PAYMENT_TYPES.has(paymentTypeRaw)) {
       skipped++
       return
     }
 
     // ── Bank name resolution ─────────────────────────────────────────────────
-    const colAStr = cellStr(cells[0])
-    const colBStr = cellStr(cells[1])
-
     const parsed = parseBankCol(colBStr, colAStr)
     if (parsed) {
       // New bank terminal explicitly named in col B
@@ -191,7 +270,7 @@ export async function parseCashierFile(
       // Same terminal code in col A → continuation row (old file format)
       // Keep lastBankName / lastTerminalId unchanged
     } else {
-      // Non-EDC row (CASH, VOUCHER KLOOK, summary lines, etc.) — skip
+      // Non-EDC row — skip
       skipped++
       return
     }
@@ -208,6 +287,7 @@ export async function parseCashierFile(
     const amount        = cellNum(cells[colMap.totalCol])
     const entityNameRaw = colMap.entityCol >= 0 ? (cellStr(cells[colMap.entityCol]) || null) : null
     const notaBill      = colMap.notaBillCol >= 0 ? (cellStr(cells[colMap.notaBillCol]) || null) : null
+    const perKasirAmounts = buildPerKasirAmounts(cells, kasirColMap)
 
     // Resolve kasir name: find which POS columns have non-zero amounts
     let kasirName: string | null = null
@@ -223,15 +303,16 @@ export async function parseCashierFile(
       terminalCode,
       bankName: lastBankName,
       terminalId: lastTerminalId,
-      paymentType,
+      paymentType: paymentTypeRaw,
       amount,
       notaBill,
       entityNameRaw,
       kasirName,
       blockType: currentBlock!,
       sourceRow: rowNum,
+      perKasirAmounts,
     })
   })
 
-  return { entries, skipped, errors, sheetFound: true }
+  return { entries, skipped, errors, sheetFound: true, kasirNames: Array.from(new Set(allKasirNames)) }
 }

@@ -144,6 +144,7 @@ model ReconciliationSession {
   signedOffBy    String?
   signedOffAt    DateTime?
   signOffComment String?
+  kasirNames     Json?                        // string[] of kasir names from KASIR BERTUGAS row
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -169,6 +170,8 @@ model CashierEntry {
   notaBill          String?
   entityNameRaw     String?
   kasirName         String?     // Name(s) from KASIR BERTUGAS row (v3 template)
+  blockType         String      @default("REG")   // "REG" | "EV"
+  perKasirAmounts   Json?                          // { "SINAR": 1000000, "MEI": 0, ... }
   sourceRow         Int?        // Row number in the cashier Excel sheet
   matchStatus       MatchStatus @default(unmatched)
   matchedMutationId String?
