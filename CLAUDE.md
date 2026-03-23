@@ -8,7 +8,7 @@ Stack: Next.js 14 (App Router) · TypeScript · Tailwind CSS · Prisma ORM · Po
 - **GitHub**: https://github.com/clawdbotmerlin/bspace-finance.git
 - **Dev server**: http://68.183.229.3:3001 (PM2 process: `bspace-finance`)
 - **Server path**: `/opt/bspace-finance/app`
-- **SSH**: `ssh -i ~/.ssh/merlin_aasha root@68.183.229.3`
+- **SSH**: `sshpass -p 'makeithappen' ssh -o StrictHostKeyChecking=no root@68.183.229.3`
 - **Local dev**: `npm run dev -- -p 3002` → http://localhost:3002
 
 ## Default Credentials
@@ -53,6 +53,7 @@ Use `expect` with password `makeithappen` for automated deploy (see previous ses
 | FRO-27       | Self-healing parser (LLM re-config) | ✅ Done |
 | FRO-28 / FIN-17 | Cashier parser v3 template support | ✅ Done |
 | FRO-29       | Multi-file bank upload in Upload Mutasi Bank step | ✅ Done |
+| FRO-30       | Session review UI polish (Excel-style layout, kasir columns, ringkasan) | ✅ Done |
 
 ## Key File Map
 ```
@@ -118,8 +119,8 @@ prisma/
 - **Outlet**: entityId, name, code, address
 - **EdcTerminal**: outletId, terminalCode, bankLabel, terminalId, accountNumber
 - **BankColumnConfig**: per-bank parser config (skipRows, dateCol, amountCol, etc.)
-- **ReconciliationSession**: outletId, sessionDate, blockType (REG|EV), status
-- **CashierEntry**: sessionId, terminalCode, bankName, paymentType, amount, matchStatus
+- **ReconciliationSession**: outletId, sessionDate, blockType (REG|EV), status, kasirNames (Json)
+- **CashierEntry**: sessionId, terminalCode, bankName, paymentType, amount, matchStatus, blockType, kasirName, perKasirAmounts (Json)
 - **BankMutation**: sessionId, bankName, transactionDate, grossAmount, direction (CR|DR), matchStatus
 - **Discrepancy**: sessionId, type, status, resolvedBy
 - **AuditLog**: userId, action, entityType, entityId
@@ -161,4 +162,53 @@ prisma/
 - `PUT /api/bank-configs/[id]` (now allows finance role) persists the accepted config
 - After save, "Coba Ulang Upload" re-runs the bank upload with the now-corrected config
 - Requires `MOONSHOT_API_KEY` env var on the server (add to `/opt/bspace-finance/app/.env` then `pm2 restart bspace-finance`)
+
+## Review Page (FRO-30) — Architecture Notes
+
+### Layout
+- Excel-style table mirroring the cashier file structure
+- REG block always renders before EV block
+- Each block is a card (`rounded-xl border shadow-sm`) followed immediately by its Ringkasan card
+- Unexpected mutations render as a separate card **outside** the main tabs card
+- Tabs: Semua Entri / Perlu Perhatian / Cocok Saja
+
+### BlockSection
+- Blue header (REG) / purple header (EV) with subtotal
+- Per-bank sub-sections, each as a `rounded-lg border shadow-sm` card
+- Columns: Kode | Bank/Terminal | Jenis | Entitas | [kasir cols…] | Total | Status Bank
+- Total column has `bg-slate-100` / `bg-slate-200` header for visual separation
+- CASH and VOUCHER rows render below the EDC bank cards in their own card
+- SUBTOTAL row at bottom (dark navy `bg-slate-800`)
+
+### Kasir Columns
+- `kasirNames: string[]` stored as JSON on `ReconciliationSession`, populated on cashier upload
+- `perKasirAmounts: Record<string, number>` stored as JSON on `CashierEntry`
+- `kasirColMap` in parser: cols 4–11 (E–J), filtered for valid names (≤20 chars, no arrows/instruction text)
+
+### RingkasanSection
+- Shows per-kasir totals: TOTAL SALES (green), yellow manual rows (shown as —), per-bank breakdown, CASH, TOTAL PAYMENT, SELISIH
+- `kasirNames.length === 0` → returns null (hidden if no kasir data)
+
+### Summary Cards
+- All amounts/counts computed client-side from `entries` state — never rely on stale API summary values
+- "Tidak Ada di Bank": uses `edcEntries.filter(e => e.matchStatus === 'unmatched')` for both amount and count
+- "Nol/Lewati": uses `entries.filter(e => e.matchStatus === 'zero').length`
+- Warning banner: only counts `missing_in_bank` open discrepancies (not unexpected mutations)
+- Success banner: shown when zero open missing_in_bank discrepancies
+
+### Action Logic
+- "Tindak" button: only on EDC entries (`missing_in_bank`, `amount_mismatch`) — NOT on unexpected mutations
+- Unexpected mutations are informational only (bank has money, no cashier record)
+- Missing in bank = high alert (cashier has sales, no bank transfer received)
+
+### Known Bugs Fixed
+- **ExcelJS formula cells**: `cellNum()` extracts `.result` from `{formula, result}` objects
+- **CASH/VOUCHER matchStatus**: run-matching reset all to `'unmatched'` but engine skipped CASH/VOUCHER. Fixed by pushing them to `result.zeros` in `lib/engine/matching.ts`
+- **Duplicate VOUCHER entries**: RINGKASAN summary rows triggered VOUCHER detection. Fixed by requiring `VALID_PAYMENT_TYPES.has(paymentTypeRaw)` for VOUCHER rows
+- **"← Ganti nama kasir" as kasir name**: filtered in parser with length/char/regex guard
+
+### Tooltip Component
+- Custom `Tooltip` component in review page: 700ms show delay (setTimeout), instant hide
+- Used on: summary cards (wide=true), truncated entitas text, bank mutation description
+- Dark slate-900 pill with arrow indicator
 
