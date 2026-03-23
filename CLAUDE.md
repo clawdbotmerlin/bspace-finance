@@ -54,6 +54,10 @@ Use `expect` with password `makeithappen` for automated deploy (see previous ses
 | FRO-28 / FIN-17 | Cashier parser v3 template support | ✅ Done |
 | FRO-29       | Multi-file bank upload in Upload Mutasi Bank step | ✅ Done |
 | FRO-30       | Session review UI polish (Excel-style layout, kasir columns, ringkasan) | ✅ Done |
+| FRO-31       | Discrepancy ignore action (discrepancies page + review page) | ✅ Done |
+| FRO-32       | Delete reconciliation session feature | ✅ Done |
+| FRO-33       | Add mutation file to existing session + re-run reconciliation | ✅ Done |
+| FRO-34       | Decouple outlets from entities — entityId optional | ✅ Done |
 
 ## Key File Map
 ```
@@ -85,7 +89,8 @@ app/
     sessions/[id]/matches/      ← GET matched pairs + zero count
     sessions/[id]/suggest-bank-config/ ← POST AI column-mapping suggestion (finance+admin)
     sessions/[id]/discrepancies/           ← GET all discrepancies
-    sessions/[id]/discrepancies/[did]/     ← PUT update discrepancy status/notes
+    sessions/[id]/discrepancies/[did]/     ← PUT update discrepancy status/notes (incl. ignore)
+    sessions/[id]/upload/bankmutation      ← POST append additional bank mutation files (never replaces)
     sessions/[id]/submit/       ← POST transition to pending_signoff
     sessions/[id]/signoff/      ← POST approve/reject (manager)
     sessions/[id]/report/       ← GET generate PDF report (signed_off only)
@@ -115,8 +120,8 @@ prisma/
 
 ## DB Schema Summary
 - **User**: id, email, name, passwordHash, role (admin|finance|manager), outletId?, isActive
-- **Entity**: legalName, shortName
-- **Outlet**: entityId, name, code, address
+- **Entity**: legalName, shortName (standalone, not required to link to outlets)
+- **Outlet**: entityId? (optional), name, code, address — outlets are standalone; one outlet can represent multiple entities
 - **EdcTerminal**: outletId, terminalCode, bankLabel, terminalId, accountNumber
 - **BankColumnConfig**: per-bank parser config (skipRows, dateCol, amountCol, etc.)
 - **ReconciliationSession**: outletId, sessionDate, blockType (REG|EV), status, kasirNames (Json)
@@ -162,6 +167,30 @@ prisma/
 - `PUT /api/bank-configs/[id]` (now allows finance role) persists the accepted config
 - After save, "Coba Ulang Upload" re-runs the bank upload with the now-corrected config
 - Requires `MOONSHOT_API_KEY` env var on the server (add to `/opt/bspace-finance/app/.env` then `pm2 restart bspace-finance`)
+
+## Roles
+- DB values unchanged: `admin`, `finance`, `manager`
+- UI labels: admin → **Administrator**, finance → **Finance Staff**, manager → **Finance Head**
+- Finance Head = manager role = can sign off sessions
+- Sign-off page has "Lihat Detail Rekonsiliasi" link back to review page for Finance Head to inspect before approving
+
+## Discrepancy Ignore (FRO-31)
+- Discrepancy `status` values: `open`, `resolved`, `ignored`
+- "Ignore" button on both `/discrepancies` page and review page
+- "Ignore All" bulk action on `/discrepancies` page
+- Ignored discrepancies are excluded from warning banner counts on review page
+
+## Delete Session (FRO-32)
+- Available on review page (admin + finance roles)
+- Cascades: deletes CashierEntries, BankMutations, Discrepancies for the session
+- Redirects to `/history` after deletion
+
+## Add Mutation File (FRO-33)
+- "Tambah File Mutasi" button on review page (shown when session is not yet signed off)
+- Opens modal: select bank name + upload file(s)
+- Always appends — never replaces existing bank mutations for that session
+- Automatically re-runs matching after upload
+- Use case: staff forgot to upload a bank file, wants to add it without deleting the session
 
 ## Review Page (FRO-30) — Architecture Notes
 
