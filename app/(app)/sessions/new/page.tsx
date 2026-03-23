@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Upload, CheckCircle2, AlertCircle, ArrowLeft, FileSpreadsheet,
-  Loader2, Eye, Plus, X,
+  Loader2, Eye, Plus, X, Download,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -272,10 +272,22 @@ function NewSessionPage() {
         <div className="space-y-4">
           {sessionBadge}
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <h2 className="font-medium text-slate-700 mb-1">Upload Laporan Kasir</h2>
-            <p className="text-xs text-slate-400 mb-4">
-              Upload satu file — blok REG dan EV akan dideteksi otomatis.
-            </p>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="font-medium text-slate-700 mb-1">Upload Laporan Kasir</h2>
+                <p className="text-xs text-slate-400">
+                  Upload satu file — blok REG dan EV akan dideteksi otomatis.
+                </p>
+              </div>
+              <a
+                href="/TEMPLATE_KASIR_FINSETTLE_v3_final.xlsx"
+                download
+                className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download Template
+              </a>
+            </div>
             <form onSubmit={handleCashierUpload} className="space-y-4">
               <FileDrop
                 file={cashierFile}
