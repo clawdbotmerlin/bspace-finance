@@ -41,7 +41,7 @@ export const GET = withAuth(async (req: NextRequest) => {
   // Summary counts (always across all discrepancies matching type/outlet/date but not status)
   const summaryWhere: Prisma.DiscrepancyWhereInput = { ...where, status: undefined }
 
-  const [total, discrepancies, openCount, investigatingCount, resolvedCount] = await Promise.all([
+  const [total, discrepancies, openCount, investigatingCount, resolvedCount, ignoredCount] = await Promise.all([
     prisma.discrepancy.count({ where }),
     prisma.discrepancy.findMany({
       where,
@@ -74,6 +74,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     prisma.discrepancy.count({ where: { ...summaryWhere, status: 'open' } }),
     prisma.discrepancy.count({ where: { ...summaryWhere, status: 'investigating' } }),
     prisma.discrepancy.count({ where: { ...summaryWhere, status: 'resolved' } }),
+    prisma.discrepancy.count({ where: { ...summaryWhere, status: 'ignored' } }),
   ])
 
   return NextResponse.json({
@@ -82,6 +83,27 @@ export const GET = withAuth(async (req: NextRequest) => {
     page,
     pages: Math.max(1, Math.ceil(total / limit)),
     limit,
-    summary: { open: openCount, investigating: investigatingCount, resolved: resolvedCount },
+    summary: { open: openCount, investigating: investigatingCount, resolved: resolvedCount, ignored: ignoredCount },
   })
+}, ['admin', 'finance'])
+
+// Bulk ignore by IDs
+export const PATCH = withAuth(async (req: NextRequest, authedSession) => {
+  const { ids } = await req.json() as { ids: string[] }
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ error: 'ids wajib diisi.' }, { status: 400 })
+  }
+
+  await prisma.discrepancy.updateMany({
+    where: { id: { in: ids }, status: { in: ['open', 'investigating'] } },
+    data: {
+      status: 'ignored',
+      resolvedBy: authedSession.user.id,
+      resolvedAt: new Date(),
+      resolutionNotes: 'Diabaikan',
+    },
+  })
+
+  return NextResponse.json({ ok: true, count: ids.length })
 }, ['admin', 'finance'])

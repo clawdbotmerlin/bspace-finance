@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle, ChevronLeft, ChevronRight, RotateCcw,
-  Loader2, CheckCircle2, Clock, CircleDot,
+  Loader2, CheckCircle2, Clock, CircleDot, EyeOff,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -57,7 +57,7 @@ interface DiscrepancyResponse {
   page: number
   pages: number
   limit: number
-  summary: { open: number; investigating: number; resolved: number }
+  summary: { open: number; investigating: number; resolved: number; ignored: number }
 }
 
 interface OutletOption {
@@ -88,11 +88,19 @@ const STATUS_LABELS: Record<string, string> = {
   open:         'Terbuka',
   investigating: 'Investigasi',
   resolved:     'Selesai',
+  ignored:      'Diabaikan',
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function statusBadge(status: string) {
+  if (status === 'ignored') {
+    return (
+      <Badge variant="outline" className="text-[11px] whitespace-nowrap text-slate-400 border-slate-200">
+        <EyeOff className="w-3 h-3 mr-1" />Diabaikan
+      </Badge>
+    )
+  }
   const map: Record<string, 'destructive' | 'warning' | 'success'> = {
     open: 'destructive', investigating: 'warning', resolved: 'success',
   }
@@ -138,7 +146,7 @@ function SummaryCard({ label, value, icon: Icon, color, activeFilter, onClick }:
   label: string
   value: number
   icon: React.ComponentType<{ className?: string }>
-  color: 'red' | 'amber' | 'emerald'
+  color: 'red' | 'amber' | 'emerald' | 'slate'
   activeFilter: boolean
   onClick: () => void
 }) {
@@ -146,6 +154,7 @@ function SummaryCard({ label, value, icon: Icon, color, activeFilter, onClick }:
     red:     { icon: 'text-red-500',     value: 'text-red-700',     ring: 'ring-red-300',     bg: activeFilter ? 'bg-red-50'     : 'bg-white' },
     amber:   { icon: 'text-amber-500',   value: 'text-amber-700',   ring: 'ring-amber-300',   bg: activeFilter ? 'bg-amber-50'   : 'bg-white' },
     emerald: { icon: 'text-emerald-500', value: 'text-emerald-700', ring: 'ring-emerald-300', bg: activeFilter ? 'bg-emerald-50' : 'bg-white' },
+    slate:   { icon: 'text-slate-400',   value: 'text-slate-500',   ring: 'ring-slate-300',   bg: activeFilter ? 'bg-slate-50'   : 'bg-white' },
   }
   const c = colorMap[color]
   return (
@@ -173,8 +182,8 @@ function ResolveDialog({ disc, onClose, onSaved }: {
   onClose: () => void
   onSaved: (updated: DiscrepancyRow) => void
 }) {
-  const [status, setStatus]   = useState<'open' | 'investigating' | 'resolved'>(
-    disc.status as 'open' | 'investigating' | 'resolved',
+  const [status, setStatus]   = useState<'open' | 'investigating' | 'resolved' | 'ignored'>(
+    disc.status as 'open' | 'investigating' | 'resolved' | 'ignored',
   )
   const [notes, setNotes]     = useState(disc.resolutionNotes ?? '')
   const [saving, setSaving]   = useState(false)
@@ -231,6 +240,7 @@ function ResolveDialog({ disc, onClose, onSaved }: {
                 <SelectItem value="open">Terbuka</SelectItem>
                 <SelectItem value="investigating">Investigasi</SelectItem>
                 <SelectItem value="resolved">Selesai</SelectItem>
+                <SelectItem value="ignored">Diabaikan</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -279,7 +289,9 @@ export default function DiscrepanciesPage() {
   const [page, setPage]           = useState(1)
 
   // Dialog state
-  const [resolving, setResolving] = useState<DiscrepancyRow | null>(null)
+  const [resolving, setResolving]   = useState<DiscrepancyRow | null>(null)
+  const [ignoringIds, setIgnoringIds] = useState<Set<string>>(new Set())
+  const [ignoringAll, setIgnoringAll] = useState(false)
 
   // ── Outlets ──
   useEffect(() => {
@@ -355,8 +367,35 @@ export default function DiscrepanciesPage() {
     })
   }
 
+  async function handleIgnore(disc: DiscrepancyRow) {
+    setIgnoringIds(prev => new Set(prev).add(disc.id))
+    const res = await fetch(`/api/sessions/${disc.sessionId}/discrepancies/${disc.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'ignored', resolutionNotes: 'Diabaikan' }),
+    })
+    setIgnoringIds(prev => { const s = new Set(prev); s.delete(disc.id); return s })
+    if (res.ok) {
+      const updated = await res.json()
+      handleResolved({ ...disc, ...updated, session: disc.session })
+    }
+  }
+
+  async function handleIgnoreAll() {
+    const openIds = data?.discrepancies.filter(d => d.status === 'open' || d.status === 'investigating').map(d => d.id) ?? []
+    if (openIds.length === 0) return
+    setIgnoringAll(true)
+    const res = await fetch('/api/discrepancies', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: openIds }),
+    })
+    setIgnoringAll(false)
+    if (res.ok) fetchDisc(page)
+  }
+
   const hasFilter = !!(statusFilter || typeFilter || outletId || dateFrom || dateTo)
-  const summary   = data?.summary ?? { open: 0, investigating: 0, resolved: 0 }
+  const summary   = data?.summary ?? { open: 0, investigating: 0, resolved: 0, ignored: 0 }
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -370,15 +409,29 @@ export default function DiscrepanciesPage() {
           </div>
           <p className="text-slate-500 text-sm">Pantau dan tindak diskrepansi dari semua sesi rekonsiliasi.</p>
         </div>
-        {data && (
-          <span className="text-xs text-slate-400 mt-1">
-            {data.total.toLocaleString('id-ID')} diskrepansi
-          </span>
-        )}
+        <div className="flex items-center gap-3 mt-1">
+          {data && (
+            <span className="text-xs text-slate-400">
+              {data.total.toLocaleString('id-ID')} diskrepansi
+            </span>
+          )}
+          {data && data.discrepancies.some(d => d.status === 'open' || d.status === 'investigating') && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleIgnoreAll}
+              disabled={ignoringAll}
+              className="gap-1.5 text-slate-500 border-slate-300 hover:bg-slate-50"
+            >
+              {ignoringAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <EyeOff className="w-3.5 h-3.5" />}
+              Abaikan Semua
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* ── Summary Cards ── */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-6">
         <SummaryCard
           label="Terbuka"
           value={summary.open}
@@ -403,6 +456,14 @@ export default function DiscrepanciesPage() {
           activeFilter={statusFilter === 'resolved'}
           onClick={() => setStatusFilter(statusFilter === 'resolved' ? '' : 'resolved')}
         />
+        <SummaryCard
+          label="Diabaikan"
+          value={summary.ignored ?? 0}
+          icon={EyeOff}
+          color="slate"
+          activeFilter={statusFilter === 'ignored'}
+          onClick={() => setStatusFilter(statusFilter === 'ignored' ? '' : 'ignored')}
+        />
       </div>
 
       {/* ── Filter Bar ── */}
@@ -421,6 +482,7 @@ export default function DiscrepanciesPage() {
               <option value="open">Terbuka</option>
               <option value="investigating">Investigasi</option>
               <option value="resolved">Selesai</option>
+              <option value="ignored">Diabaikan</option>
             </select>
           </div>
 
@@ -549,6 +611,7 @@ export default function DiscrepanciesPage() {
                       className={cn(
                         'border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors',
                         d.status === 'open' && 'bg-red-50/30',
+                        d.status === 'ignored' && 'opacity-50',
                       )}
                     >
                       {/* Sesi */}
@@ -594,12 +657,23 @@ export default function DiscrepanciesPage() {
 
                       {/* Aksi */}
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => setResolving(d)}
-                          className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline px-2 py-1 rounded hover:bg-blue-50 transition-colors"
-                        >
-                          Tindak
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setResolving(d)}
+                            className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                          >
+                            Tindak
+                          </button>
+                          {d.status !== 'ignored' && (
+                            <button
+                              onClick={() => handleIgnore(d)}
+                              disabled={ignoringIds.has(d.id)}
+                              className="text-xs font-medium text-slate-400 hover:text-slate-600 px-2 py-1 rounded hover:bg-slate-100 transition-colors disabled:opacity-50"
+                            >
+                              {ignoringIds.has(d.id) ? '...' : 'Abaikan'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )

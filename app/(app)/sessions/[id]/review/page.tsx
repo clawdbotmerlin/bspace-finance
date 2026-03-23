@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, CheckCircle2, XCircle, AlertTriangle, MinusCircle,
-  RefreshCw, Send, Loader2, AlertCircle, Banknote, Tag,
+  RefreshCw, Send, Loader2, AlertCircle, Banknote, Tag, EyeOff,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -208,6 +208,29 @@ export default function ReviewPage() {
     setResolveTarget(null)
   }
 
+  const [ignoringIds, setIgnoringIds] = useState<Set<string>>(new Set())
+  const [ignoringAll, setIgnoringAll] = useState(false)
+
+  async function handleIgnoreDisc(disc: Discrepancy) {
+    setIgnoringIds(prev => new Set(prev).add(disc.id))
+    const res = await fetch(`/api/sessions/${disc.sessionId}/discrepancies/${disc.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'ignored', resolutionNotes: 'Diabaikan' }),
+    })
+    setIgnoringIds(prev => { const s = new Set(prev); s.delete(disc.id); return s })
+    if (res.ok) { const updated = await res.json(); handleDiscUpdated(updated) }
+  }
+
+  async function handleIgnoreAll() {
+    setIgnoringAll(true)
+    const res = await fetch(`/api/sessions/${sessionId}/discrepancies`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'ignore_all' }),
+    })
+    setIgnoringAll(false)
+    if (res.ok) { const updated: Discrepancy[] = await res.json(); setDiscrepancies(updated) }
+  }
+
   if (loading) return (
     <div className="p-6 flex items-center justify-center min-h-[60vh]">
       <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" />
@@ -356,9 +379,21 @@ export default function ReviewPage() {
       })()}
 
       {openDiscCount > 0 ? (
-        <div className="mb-3 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-2.5 text-sm">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span><strong>{openDiscCount} entri kasir</strong> tidak ditemukan di mutasi bank — harap ditindaklanjuti sebelum submit</span>
+        <div className="mb-3 flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-2.5 text-sm">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span><strong>{openDiscCount} entri kasir</strong> tidak ditemukan di mutasi bank — harap ditindaklanjuti sebelum submit</span>
+          </div>
+          {!isReadOnly && (
+            <button
+              onClick={handleIgnoreAll}
+              disabled={ignoringAll}
+              className="shrink-0 flex items-center gap-1.5 text-xs font-medium text-amber-700 border border-amber-300 rounded-md px-2.5 py-1 hover:bg-amber-100 transition-colors disabled:opacity-50"
+            >
+              {ignoringAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <EyeOff className="w-3 h-3" />}
+              Abaikan Semua
+            </button>
+          )}
         </div>
       ) : entries.length > 0 && (
         <div className="mb-3 flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-4 py-2.5 text-sm">
@@ -407,6 +442,8 @@ export default function ReviewPage() {
                     tab={tab}
                     isReadOnly={isReadOnly}
                     onResolve={setResolveTarget}
+                    onIgnore={handleIgnoreDisc}
+                    ignoringIds={ignoringIds}
                   />
                 </div>
                 {/* Ringkasan immediately follows its block */}
@@ -454,7 +491,7 @@ export default function ReviewPage() {
 
 // ─── Block Section ────────────────────────────────────────────────────────────
 
-function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEntries, cashEntries, discByEntryId, tab, isReadOnly, onResolve }: {
+function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEntries, cashEntries, discByEntryId, tab, isReadOnly, onResolve, onIgnore, ignoringIds }: {
   block: 'REG' | 'EV'
   session: SessionDetail
   kasirNames: string[]
@@ -465,6 +502,8 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
   tab: ReviewTab
   isReadOnly: boolean
   onResolve: (d: Discrepancy) => void
+  onIgnore: (d: Discrepancy) => void
+  ignoringIds: Set<string>
 }) {
   const blockLabel = block === 'REG' ? '📋 REG' : '🎪 EV'
   const blockColor = block === 'REG' ? 'bg-blue-700' : 'bg-violet-700'
@@ -552,6 +591,8 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
                         discrepancy={disc}
                         sessionDate={session.sessionDate}
                         onResolve={onResolve}
+                        onIgnore={onIgnore}
+                        ignoringIds={ignoringIds}
                         readOnly={isReadOnly}
                         isLast={isLast}
                       />
@@ -631,12 +672,14 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
 
 // ─── Entry Row ────────────────────────────────────────────────────────────────
 
-function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, readOnly, isLast }: {
+function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, onIgnore, ignoringIds, readOnly, isLast }: {
   entry: CashierEntryFull
   kasirNames: string[]
   discrepancy: Discrepancy | null
   sessionDate: string
   onResolve: (d: Discrepancy) => void
+  onIgnore: (d: Discrepancy) => void
+  ignoringIds: Set<string>
   readOnly: boolean
   isLast: boolean
 }) {
@@ -644,7 +687,9 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, read
   const isUnmatched = entry.matchStatus === 'unmatched'
   const isMismatch = discrepancy?.discrepancyType === 'amount_mismatch'
   const isMatched = entry.matchStatus === 'matched'
-  const discResolved = discrepancy?.status === 'resolved'
+  const discResolved = discrepancy?.status === 'resolved' || discrepancy?.status === 'ignored'
+  const discIgnored  = discrepancy?.status === 'ignored'
+  const isIgnoring   = discrepancy ? ignoringIds.has(discrepancy.id) : false
 
   const rowBg = isUnmatched && !discResolved ? 'bg-red-50/60' : isMismatch && !discResolved ? 'bg-amber-50/60' : isZero ? 'bg-slate-50/80' : ''
 
@@ -715,9 +760,15 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, read
               Bank: {formatRupiah(entry.bankMutation.grossAmount)} · {settlementBadge(entry.bankMutation.transactionDate, sessionDate)}
             </div>
             {!discResolved && discrepancy && (
-              <Button size="sm" variant="outline" className="text-[11px] h-6 px-2 py-0 mt-1" onClick={() => onResolve(discrepancy)} disabled={readOnly}>Tindak</Button>
+              <div className="flex items-center gap-1 mt-1">
+                <Button size="sm" variant="outline" className="text-[11px] h-6 px-2 py-0" onClick={() => onResolve(discrepancy)} disabled={readOnly}>Tindak</Button>
+                <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 py-0 text-slate-400 hover:text-slate-600" onClick={() => onIgnore(discrepancy)} disabled={readOnly || isIgnoring}>
+                  {isIgnoring ? <Loader2 className="w-3 h-3 animate-spin" /> : <EyeOff className="w-3 h-3" />}
+                </Button>
+              </div>
             )}
-            {discResolved && <span className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Selesai</span>}
+            {discIgnored && <span className="text-[11px] text-slate-400 font-medium mt-1 flex items-center gap-1"><EyeOff className="w-3 h-3" />Diabaikan</span>}
+            {discResolved && !discIgnored && <span className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Selesai</span>}
           </div>
         ) : isUnmatched ? (
           <div>
@@ -725,9 +776,15 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, read
               <XCircle className="w-3.5 h-3.5" />Tidak cocok
             </div>
             {!discResolved && discrepancy && (
-              <Button size="sm" variant="outline" className="text-[11px] h-6 px-2 py-0 mt-1" onClick={() => onResolve(discrepancy)} disabled={readOnly}>Tindak</Button>
+              <div className="flex items-center gap-1 mt-1">
+                <Button size="sm" variant="outline" className="text-[11px] h-6 px-2 py-0" onClick={() => onResolve(discrepancy)} disabled={readOnly}>Tindak</Button>
+                <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 py-0 text-slate-400 hover:text-slate-600" onClick={() => onIgnore(discrepancy)} disabled={readOnly || isIgnoring}>
+                  {isIgnoring ? <Loader2 className="w-3 h-3 animate-spin" /> : <EyeOff className="w-3 h-3" />}
+                </Button>
+              </div>
             )}
-            {discResolved && <span className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Selesai</span>}
+            {discIgnored && <span className="text-[11px] text-slate-400 font-medium mt-1 flex items-center gap-1"><EyeOff className="w-3 h-3" />Diabaikan</span>}
+            {discResolved && !discIgnored && <span className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Selesai</span>}
           </div>
         ) : (
           <div className="flex items-center gap-1 text-[11px] text-slate-400">
@@ -987,6 +1044,7 @@ function ResolveDialog({ discrepancy, open, onClose, onSaved }: {
                 <SelectItem value="open">Terbuka</SelectItem>
                 <SelectItem value="investigating">Investigasi</SelectItem>
                 <SelectItem value="resolved">Selesai</SelectItem>
+                <SelectItem value="ignored">Diabaikan</SelectItem>
               </SelectContent>
             </Select>
           </div>

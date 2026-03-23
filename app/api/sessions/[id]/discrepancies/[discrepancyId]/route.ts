@@ -9,7 +9,7 @@ export const PUT = withAuth(async (req: NextRequest, authedSession) => {
 
   const body = await req.json()
   const { status, resolutionNotes } = body as {
-    status?: 'open' | 'investigating' | 'resolved'
+    status?: 'open' | 'investigating' | 'resolved' | 'ignored'
     resolutionNotes?: string
   }
 
@@ -17,7 +17,7 @@ export const PUT = withAuth(async (req: NextRequest, authedSession) => {
     return NextResponse.json({ error: 'Status wajib diisi.' }, { status: 400 })
   }
 
-  if (!['open', 'investigating', 'resolved'].includes(status)) {
+  if (!['open', 'investigating', 'resolved', 'ignored'].includes(status)) {
     return NextResponse.json({ error: 'Status tidak valid.' }, { status: 400 })
   }
 
@@ -36,7 +36,7 @@ export const PUT = withAuth(async (req: NextRequest, authedSession) => {
     data.resolutionNotes = resolutionNotes
   }
 
-  if (status === 'resolved') {
+  if (status === 'resolved' || status === 'ignored') {
     data.resolvedBy = authedSession.user.id
     data.resolvedAt = new Date()
   }
