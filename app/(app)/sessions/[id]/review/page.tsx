@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, CheckCircle2, XCircle, AlertTriangle, MinusCircle,
   RefreshCw, Send, Loader2, AlertCircle, Banknote, Tag, EyeOff,
+  Upload, Trash2, PlusCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -133,6 +134,7 @@ function discTypeLabel(type: string) {
 
 export default function ReviewPage() {
   const params = useParams()
+  const router = useRouter()
   const sessionId = params.id as string
 
   const [session, setSession] = useState<SessionDetail | null>(null)
@@ -148,6 +150,18 @@ export default function ReviewPage() {
   const [submitting, setSubmitting] = useState(false)
   const [showRerunConfirm, setShowRerunConfirm] = useState(false)
   const [resolveTarget, setResolveTarget] = useState<Discrepancy | null>(null)
+
+  // Upload mutation state
+  const [showUploadMutation, setShowUploadMutation] = useState(false)
+  const [uploadBank, setUploadBank] = useState('BCA')
+  const [uploadFiles, setUploadFiles] = useState<FileList | null>(null)
+  const [uploadAppend, setUploadAppend] = useState(false)
+  const [uploadBusy, setUploadBusy] = useState(false)
+  const [uploadMsg, setUploadMsg] = useState('')
+
+  // Delete session state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const discByEntryId = useMemo(
     () => new Map(discrepancies.filter(d => d.cashierEntryId).map(d => [d.cashierEntryId!, d])),
@@ -231,6 +245,48 @@ export default function ReviewPage() {
     if (res.ok) { const updated: Discrepancy[] = await res.json(); setDiscrepancies(updated) }
   }
 
+  async function handleUploadMutation() {
+    if (!uploadFiles || uploadFiles.length === 0) return
+    setUploadBusy(true); setUploadMsg('')
+    try {
+      let totalParsed = 0
+      for (let i = 0; i < uploadFiles.length; i++) {
+        const fd = new FormData()
+        fd.append('file', uploadFiles[i])
+        fd.append('bankName', uploadBank)
+        if (i > 0 || uploadAppend) fd.append('append', 'true')
+        const res = await fetch(`/api/sessions/${sessionId}/upload/bankmutation`, { method: 'POST', body: fd })
+        if (!res.ok) { const d = await res.json(); setUploadMsg(`Gagal: ${d.error ?? 'Upload error'}`); return }
+        const d = await res.json()
+        totalParsed += d.parsed ?? 0
+      }
+      setShowUploadMutation(false)
+      setUploadFiles(null)
+      setUploadMsg('')
+      // Auto-rerun matching after upload
+      setRerunning(true)
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}/run-matching`, { method: 'POST' })
+        if (!res.ok) { const d = await res.json(); setError(d.error ?? 'Rekonsiliasi ulang gagal.') }
+        await fetchAll()
+      } finally { setRerunning(false) }
+    } finally { setUploadBusy(false) }
+  }
+
+  async function handleDeleteSession() {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const d = await res.json()
+        setError(d.error ?? 'Gagal menghapus sesi.')
+        setShowDeleteConfirm(false)
+        return
+      }
+      router.push('/history')
+    } finally { setDeleting(false) }
+  }
+
   if (loading) return (
     <div className="p-6 flex items-center justify-center min-h-[60vh]">
       <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-400" />
@@ -299,12 +355,27 @@ export default function ReviewPage() {
             {statusBadge(session.status)}
           </div>
           <div className="flex items-center gap-2">
+            {!isReadOnly && (
+              <Button variant="outline" size="sm" onClick={() => { setShowUploadMutation(true); setUploadMsg('') }} className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50">
+                <PlusCircle className="w-3.5 h-3.5" />
+                Tambah Mutasi
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => setShowRerunConfirm(true)} disabled={rerunning || isReadOnly} className="gap-1.5">
               {rerunning ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Memproses...</> : <><RefreshCw className="w-3.5 h-3.5" />Jalankan Ulang</>}
             </Button>
             <Button size="sm" onClick={handleSubmit} disabled={submitting || isReadOnly} className="gap-1.5">
               {submitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Mengirim...</> : <><Send className="w-3.5 h-3.5" />Submit TTD</>}
             </Button>
+            {session.status !== 'signed_off' && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-md border border-slate-200 hover:border-red-200 transition-colors"
+                title="Hapus sesi"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -485,6 +556,94 @@ export default function ReviewPage() {
       {resolveTarget && (
         <ResolveDialog discrepancy={resolveTarget} open onClose={() => setResolveTarget(null)} onSaved={handleDiscUpdated} />
       )}
+
+      {/* Upload Mutation Dialog */}
+      <Dialog open={showUploadMutation} onOpenChange={(v) => { if (!uploadBusy) { setShowUploadMutation(v); setUploadMsg('') } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="w-4 h-4 text-blue-600" />
+              Tambah File Mutasi Bank
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-500 -mt-1">Upload file mutasi tambahan jika ada yang terlewat. Rekonsiliasi akan dijalankan ulang otomatis setelah upload.</p>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Nama Bank</Label>
+              <Select value={uploadBank} onValueChange={setUploadBank} disabled={uploadBusy}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BCA">BCA</SelectItem>
+                  <SelectItem value="BNI">BNI</SelectItem>
+                  <SelectItem value="BRI">BRI</SelectItem>
+                  <SelectItem value="MANDIRI">MANDIRI</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>File Mutasi</Label>
+              <input
+                type="file"
+                multiple
+                accept=".xlsx,.xls,.csv"
+                disabled={uploadBusy}
+                onChange={(e) => setUploadFiles(e.target.files)}
+                className="w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-slate-200 file:bg-slate-50 file:text-slate-700 file:text-xs hover:file:bg-slate-100 cursor-pointer"
+              />
+              <p className="text-[11px] text-slate-400">Format: .xlsx, .xls, atau .csv — boleh pilih lebih dari 1 file</p>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={uploadAppend}
+                onChange={(e) => setUploadAppend(e.target.checked)}
+                disabled={uploadBusy}
+                className="rounded"
+              />
+              <span className="text-sm text-slate-600">Tambahkan ke data yang sudah ada (jangan hapus mutasi lama untuk bank ini)</span>
+            </label>
+            {uploadMsg && (
+              <p className={cn('text-sm rounded-lg px-3 py-2', uploadMsg.startsWith('Gagal') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700')}>
+                {uploadMsg}
+              </p>
+            )}
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => { setShowUploadMutation(false); setUploadMsg('') }} disabled={uploadBusy}>Batal</Button>
+            <Button onClick={handleUploadMutation} disabled={uploadBusy || !uploadFiles || uploadFiles.length === 0} className="gap-1.5">
+              {uploadBusy ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Mengupload...</> : <><Upload className="w-3.5 h-3.5" />Upload & Rekonsiliasi Ulang</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Session Dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={(v) => { if (!deleting) setShowDeleteConfirm(v) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-4 h-4" />
+              Hapus Sesi Rekonsiliasi?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-2 space-y-3">
+            <div className="bg-slate-50 rounded-lg p-3 text-sm space-y-1 text-slate-600">
+              <p><span className="font-medium">Outlet:</span> {session.outlet.name}</p>
+              <p><span className="font-medium">Tanggal:</span> {new Date(session.sessionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}</p>
+            </div>
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>Semua data kasir, mutasi bank, dan diskrepansi untuk sesi ini akan ikut terhapus secara permanen dan tidak bisa dikembalikan.</span>
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>Batal</Button>
+            <Button variant="destructive" onClick={handleDeleteSession} disabled={deleting} className="gap-1.5">
+              {deleting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Menghapus...</> : <><Trash2 className="w-3.5 h-3.5" />Ya, Hapus Sesi</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
