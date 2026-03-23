@@ -271,10 +271,15 @@ export default function ReviewPage() {
         </div>
       )}
 
-      {openDiscCount > 0 && (
+      {openDiscCount > 0 ? (
         <div className="mb-3 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-2.5 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span><strong>{openDiscCount} item</strong> perlu ditindaklanjuti sebelum submit</span>
+          <span><strong>{openDiscCount} entri kasir</strong> tidak ditemukan di mutasi bank — harap ditindaklanjuti sebelum submit</span>
+        </div>
+      ) : entries.length > 0 && (
+        <div className="mb-3 flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-4 py-2.5 text-sm">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span><strong>Semua entri kasir</strong> memiliki mutasi bank yang cocok — sesi siap untuk disubmit</span>
         </div>
       )}
 
