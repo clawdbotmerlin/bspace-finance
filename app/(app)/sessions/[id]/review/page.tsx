@@ -292,9 +292,17 @@ export default function ReviewPage() {
       {summary && (() => {
         const cashCount = cashEntries.filter(e => e.paymentType === 'CASH').length
         const voucherCount = cashEntries.filter(e => e.paymentType === 'VOUCHER').length
-        const unmatchedEdcCount = entries.filter(e => e.matchStatus === 'unmatched' && e.paymentType !== 'CASH' && e.paymentType !== 'VOUCHER').length
-        const edcZeroCount = summary.zeroCount - cashCount - voucherCount
+        // Compute unmatched EDC consistently from client-side entries (amount + count use same filter)
+        const unmatchedEdcEntries = edcEntries.filter(e => e.matchStatus === 'unmatched')
+        const unmatchedEdcCount = unmatchedEdcEntries.length
+        const unmatchedEdcAmount = unmatchedEdcEntries.reduce((s, e) => s + Number(e.amount), 0)
+        // zeroCount from API may be stale; compute from entries directly
+        const zeroEntries = entries.filter(e => e.matchStatus === 'zero')
+        const edcZeroCount = zeroEntries.filter(e => e.paymentType !== 'CASH' && e.paymentType !== 'VOUCHER').length
         const matchRate = edcEntries.length > 0 ? Math.round(matchedEntries.length / edcEntries.length * 100) : 0
+        // Total: EDC matched + EDC unmatched + EDC zero (true EDC picture)
+        const edcTotal = edcEntries.reduce((s, e) => s + Number(e.amount), 0)
+        const cashTotal = cashEntries.reduce((s, e) => s + Number(e.amount), 0)
         return (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <SummaryCard
@@ -304,9 +312,8 @@ export default function ReviewPage() {
               tooltip={<>
                 <div className="font-semibold mb-1">Total transaksi di file kasir</div>
                 <div className="space-y-0.5 text-slate-300">
-                  <div>• {edcEntries.length} entri EDC (QR, Debit, KK)</div>
-                  <div>• {cashCount} kas fisik</div>
-                  <div>• {voucherCount} voucher</div>
+                  <div>• {formatRupiah(edcTotal)} dari {edcEntries.length} entri EDC</div>
+                  <div>• {formatRupiah(cashTotal)} dari {cashCount} kas & {voucherCount} voucher</div>
                 </div>
               </>}
             />
@@ -320,11 +327,11 @@ export default function ReviewPage() {
               </>}
             />
             <SummaryCard
-              label="Tidak Ada di Bank" amount={summary.unmatchedAmount}
+              label="Tidak Ada di Bank" amount={unmatchedEdcAmount}
               sub={`${unmatchedEdcCount} entri EDC tanpa mutasi`}
               color={unmatchedEdcCount > 0 ? 'red' : 'slate'}
               tooltip={<>
-                <div className="font-semibold mb-1">Penjualan tanpa transfer bank</div>
+                <div className="font-semibold mb-1">Penjualan EDC tanpa transfer bank</div>
                 <div className="text-slate-300">{unmatchedEdcCount > 0
                   ? `${unmatchedEdcCount} entri kasir tidak ditemukan di mutasi bank. Perlu investigasi — bisa jadi fraud, transfer fiktif, atau belum settle.`
                   : 'Semua entri EDC sudah memiliki mutasi bank yang cocok.'
@@ -332,7 +339,7 @@ export default function ReviewPage() {
               </>}
             />
             <SummaryCard
-              label="Nol / Lewati" amount={null} count={summary.zeroCount}
+              label="Nol / Lewati" amount={null} count={zeroEntries.length}
               sub={`${edcZeroCount > 0 ? `${edcZeroCount} EDC nol · ` : ''}${cashCount} kas · ${voucherCount} voucher`}
               color="slate"
               tooltip={<>
