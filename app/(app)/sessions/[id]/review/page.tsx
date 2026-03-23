@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -13,6 +13,33 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { cn, formatRupiah } from '@/lib/utils'
+
+// ─── Tooltip ─────────────────────────────────────────────────────────────────
+
+function Tooltip({ children, content, wide }: { children: React.ReactNode; content: React.ReactNode; wide?: boolean }) {
+  const [visible, setVisible] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function show() { timer.current = setTimeout(() => setVisible(true), 700) }
+  function hide() { if (timer.current) clearTimeout(timer.current); setVisible(false) }
+
+  return (
+    <div className="relative inline-block" onMouseEnter={show} onMouseLeave={hide}>
+      {children}
+      {visible && (
+        <div className={cn(
+          'absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none',
+          wide ? 'w-64' : 'w-max max-w-[220px]',
+        )}>
+          <div className="bg-slate-900 text-white text-[11px] rounded-lg px-3 py-2 shadow-xl leading-relaxed">
+            {content}
+          </div>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-slate-900" />
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -262,14 +289,64 @@ export default function ReviewPage() {
       {error && <div className="mb-3"><ErrorMsg msg={error} /></div>}
 
       {/* Summary Cards */}
-      {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-          <SummaryCard label="Total Kasir" amount={summary.cashierTotal} sub={`${edcEntries.length} entri EDC`} color="slate" />
-          <SummaryCard label="Cocok dengan Bank" amount={summary.matchedAmount} sub={`${matchedEntries.length} entri`} color="emerald" />
-          <SummaryCard label="Tidak Ada di Bank" amount={summary.unmatchedAmount} sub={`${edcEntries.filter(e => e.matchStatus === 'unmatched').length} entri`} color="red" />
-          <SummaryCard label="Nol / Lewati" amount={null} sub={`${summary.zeroCount} entri`} color="slate" count={summary.zeroCount} />
-        </div>
-      )}
+      {summary && (() => {
+        const cashCount = cashEntries.filter(e => e.paymentType === 'CASH').length
+        const voucherCount = cashEntries.filter(e => e.paymentType === 'VOUCHER').length
+        const unmatchedEdcCount = entries.filter(e => e.matchStatus === 'unmatched' && e.paymentType !== 'CASH' && e.paymentType !== 'VOUCHER').length
+        const edcZeroCount = summary.zeroCount - cashCount - voucherCount
+        const matchRate = edcEntries.length > 0 ? Math.round(matchedEntries.length / edcEntries.length * 100) : 0
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <SummaryCard
+              label="Total Kasir" amount={summary.cashierTotal}
+              sub={`${edcEntries.length} EDC · ${cashCount} kas · ${voucherCount} voucher`}
+              color="slate"
+              tooltip={<>
+                <div className="font-semibold mb-1">Total transaksi di file kasir</div>
+                <div className="space-y-0.5 text-slate-300">
+                  <div>• {edcEntries.length} entri EDC (QR, Debit, KK)</div>
+                  <div>• {cashCount} kas fisik</div>
+                  <div>• {voucherCount} voucher</div>
+                </div>
+              </>}
+            />
+            <SummaryCard
+              label="Cocok dengan Bank" amount={summary.matchedAmount}
+              sub={`${matchedEntries.length} dari ${edcEntries.length} EDC (${matchRate}%)`}
+              color="emerald"
+              tooltip={<>
+                <div className="font-semibold mb-1">Entri yang cocok dengan mutasi bank</div>
+                <div className="text-slate-300">{matchedEntries.length} entri EDC berhasil dicocokkan dari total {edcEntries.length} entri.</div>
+              </>}
+            />
+            <SummaryCard
+              label="Tidak Ada di Bank" amount={summary.unmatchedAmount}
+              sub={`${unmatchedEdcCount} entri EDC tanpa mutasi`}
+              color={unmatchedEdcCount > 0 ? 'red' : 'slate'}
+              tooltip={<>
+                <div className="font-semibold mb-1">Penjualan tanpa transfer bank</div>
+                <div className="text-slate-300">{unmatchedEdcCount > 0
+                  ? `${unmatchedEdcCount} entri kasir tidak ditemukan di mutasi bank. Perlu investigasi — bisa jadi fraud, transfer fiktif, atau belum settle.`
+                  : 'Semua entri EDC sudah memiliki mutasi bank yang cocok.'
+                }</div>
+              </>}
+            />
+            <SummaryCard
+              label="Nol / Lewati" amount={null} count={summary.zeroCount}
+              sub={`${edcZeroCount > 0 ? `${edcZeroCount} EDC nol · ` : ''}${cashCount} kas · ${voucherCount} voucher`}
+              color="slate"
+              tooltip={<>
+                <div className="font-semibold mb-1">Entri yang tidak perlu pencocokan bank</div>
+                <div className="space-y-0.5 text-slate-300">
+                  {edcZeroCount > 0 && <div>• {edcZeroCount} entri EDC dengan nilai Rp 0</div>}
+                  <div>• {cashCount} kas fisik (tidak melalui bank)</div>
+                  <div>• {voucherCount} voucher (tidak melalui bank)</div>
+                </div>
+              </>}
+            />
+          </div>
+        )
+      })()}
 
       {openDiscCount > 0 ? (
         <div className="mb-3 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-2.5 text-sm">
@@ -583,7 +660,11 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, read
 
       {/* Entitas */}
       <td className="px-3 py-2 w-40">
-        <div className="text-[11px] text-slate-600 leading-tight truncate max-w-[150px]" title={entry.entityNameRaw ?? undefined}>{entry.entityNameRaw}</div>
+        {entry.entityNameRaw ? (
+          <Tooltip content={entry.entityNameRaw}>
+            <div className="text-[11px] text-slate-600 leading-tight truncate max-w-[150px] cursor-default">{entry.entityNameRaw}</div>
+          </Tooltip>
+        ) : null}
         {entry.notaBill && <div className="text-[10px] text-slate-500 font-mono">nota: {entry.notaBill}</div>}
       </td>
 
@@ -613,7 +694,9 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, read
               {formatRupiah(entry.bankMutation.grossAmount)} · {new Date(entry.bankMutation.transactionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' })} {settlementBadge(entry.bankMutation.transactionDate, sessionDate)}
             </div>
             {entry.bankMutation.description && (
-              <div className="text-[10px] text-slate-500 truncate max-w-[160px]" title={entry.bankMutation.description}>{entry.bankMutation.description}</div>
+              <Tooltip content={entry.bankMutation.description}>
+                <div className="text-[10px] text-slate-500 truncate max-w-[160px] cursor-default">{entry.bankMutation.description}</div>
+              </Tooltip>
             )}
           </div>
         ) : isMismatch && entry.bankMutation ? (
@@ -827,19 +910,21 @@ function bankTextColor(name: string) {
 
 // ─── Summary Card ─────────────────────────────────────────────────────────────
 
-function SummaryCard({ label, amount, sub, color, count }: {
-  label: string; amount: number | null; sub: string; color: 'slate' | 'emerald' | 'red'; count?: number
+function SummaryCard({ label, amount, sub, color, count, tooltip }: {
+  label: string; amount: number | null; sub: string; color: 'slate' | 'emerald' | 'red'; count?: number; tooltip?: React.ReactNode
 }) {
   const colors = { slate: { value: 'text-slate-700', label: 'text-slate-500' }, emerald: { value: 'text-emerald-700', label: 'text-emerald-600' }, red: { value: 'text-red-700', label: 'text-red-500' } }
   const c = colors[color]
-  return (
-    <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm">
+  const inner = (
+    <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm w-full cursor-default">
       <p className="text-xs text-slate-500 font-medium mb-1">{label}</p>
       {amount !== null ? <p className={cn('text-lg font-bold font-mono leading-tight', c.value)}>{formatRupiah(amount)}</p>
         : <p className={cn('text-2xl font-bold leading-tight', c.value)}>{count ?? 0}</p>}
       <p className={cn('text-xs mt-0.5', c.label)}>{sub}</p>
     </div>
   )
+  if (!tooltip) return inner
+  return <Tooltip content={tooltip} wide>{inner}</Tooltip>
 }
 
 // ─── Resolve Dialog ───────────────────────────────────────────────────────────

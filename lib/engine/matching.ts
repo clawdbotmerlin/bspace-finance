@@ -76,8 +76,9 @@ export function runMatchingEngine(
       continue
     }
 
-    // Cash / Voucher — no bank settlement expected
+    // Cash / Voucher — no bank settlement expected, treated as zero (skipped)
     if (SKIP_PAYMENT_TYPES.has(entry.paymentType.toUpperCase())) {
+      result.zeros.push(entry.id)
       continue
     }
 
