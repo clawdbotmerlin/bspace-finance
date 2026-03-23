@@ -777,7 +777,7 @@ function UnexpectedSection({ unexpected, session, discByMutationId, isReadOnly, 
               const disc = discByMutationId.get(mut.id) ?? null
               const discResolved = disc?.status === 'resolved'
               return (
-                <div key={mut.id} className="grid grid-cols-[1fr_auto] gap-2 px-4 py-2 items-start border-b border-orange-50/80 last:border-0 bg-orange-50/20">
+                <div key={mut.id} className="grid grid-cols-[1fr_auto] gap-2 px-4 py-2 items-start border-b border-orange-50/80 last:border-0 bg-orange-50/20 hover:brightness-[0.97] hover:bg-orange-50/60 transition-colors cursor-default">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono font-semibold text-slate-800 tabular-nums text-sm">{formatRupiah(mut.grossAmount)}</span>
