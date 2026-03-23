@@ -4,10 +4,11 @@ import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import {
   History, Loader2, AlertCircle, Eye, ClipboardCheck,
-  Search, X, ChevronUp, ChevronDown, ArrowRight,
+  Search, X, ChevronUp, ChevronDown, ArrowRight, Trash2, AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -44,44 +45,125 @@ function statusBadge(status: string) {
   return <Badge variant={s.variant} className="text-[11px] whitespace-nowrap">{s.label}</Badge>
 }
 
-function ActionCell({ s }: { s: SessionRow }) {
-  if (s.status === 'uploading') {
-    return (
-      <Link href={`/sessions/new?resumeId=${s.id}`}>
-        <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
-          <ArrowRight className="w-3 h-3" /> Lanjutkan
-        </Button>
-      </Link>
-    )
+function canDelete(status: string, role: string) {
+  if (status === 'signed_off') return false
+  if (role === 'admin') return true
+  if (role === 'finance') return status === 'uploading' || status === 'reviewing'
+  return false
+}
+
+function ActionCell({ s, userRole, onDelete }: { s: SessionRow; userRole: string; onDelete: (s: SessionRow) => void }) {
+  const deletable = canDelete(s.status, userRole)
+  return (
+    <div className="flex items-center justify-end gap-1.5">
+      {s.status === 'uploading' && (
+        <Link href={`/sessions/new?resumeId=${s.id}`}>
+          <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
+            <ArrowRight className="w-3 h-3" /> Lanjutkan
+          </Button>
+        </Link>
+      )}
+      {s.status === 'reviewing' && (
+        <Link href={`/sessions/${s.id}/review`}>
+          <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
+            <Eye className="w-3 h-3" /> Review
+          </Button>
+        </Link>
+      )}
+      {s.status === 'pending_signoff' && (
+        <Link href={`/sessions/${s.id}/signoff`}>
+          <Button size="sm" className="gap-1 text-xs h-7 px-2.5">
+            <ClipboardCheck className="w-3 h-3" /> TTD
+          </Button>
+        </Link>
+      )}
+      {s.status === 'signed_off' && (
+        <Link href={`/sessions/${s.id}/signoff`}>
+          <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
+            <Eye className="w-3 h-3" /> Lihat
+          </Button>
+        </Link>
+      )}
+      {deletable && (
+        <button
+          onClick={() => onDelete(s)}
+          className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"
+          title="Hapus sesi"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─── Delete Confirm Dialog ────────────────────────────────────────────────────
+
+function DeleteConfirmDialog({ session, onClose, onDeleted }: {
+  session: SessionRow
+  onClose: () => void
+  onDeleted: (id: string) => void
+}) {
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleDelete() {
+    setDeleting(true)
+    setError('')
+    const res = await fetch(`/api/sessions/${session.id}`, { method: 'DELETE' })
+    setDeleting(false)
+    if (res.ok) {
+      onDeleted(session.id)
+    } else {
+      const d = await res.json().catch(() => ({}))
+      setError(d.error ?? 'Gagal menghapus sesi.')
+    }
   }
-  if (s.status === 'reviewing') {
-    return (
-      <Link href={`/sessions/${s.id}/review`}>
-        <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
-          <Eye className="w-3 h-3" /> Review
-        </Button>
-      </Link>
-    )
-  }
-  if (s.status === 'pending_signoff') {
-    return (
-      <Link href={`/sessions/${s.id}/signoff`}>
-        <Button size="sm" className="gap-1 text-xs h-7 px-2.5">
-          <ClipboardCheck className="w-3 h-3" /> TTD
-        </Button>
-      </Link>
-    )
-  }
-  if (s.status === 'signed_off') {
-    return (
-      <Link href={`/sessions/${s.id}/signoff`}>
-        <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
-          <Eye className="w-3 h-3" /> Lihat
-        </Button>
-      </Link>
-    )
-  }
-  return <span className="text-xs text-slate-300">—</span>
+
+  const sessionDateStr = new Date(session.sessionDate).toLocaleDateString('id-ID', {
+    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+  })
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && !deleting && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-600">
+            <Trash2 className="w-4 h-4" />
+            Hapus Sesi Rekonsiliasi?
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="mt-1 space-y-1 text-sm text-slate-600 bg-slate-50 rounded-lg p-3">
+          <p><span className="font-medium">Outlet:</span> {session.outlet.name}</p>
+          <p><span className="font-medium">Tanggal:</span> {sessionDateStr}</p>
+          <p><span className="font-medium">Status:</span> {session.status}</p>
+          <p><span className="font-medium">Entri Kasir:</span> {session._count.cashierEntries}</p>
+          <p><span className="font-medium">Mutasi Bank:</span> {session._count.bankMutations}</p>
+        </div>
+
+        <div className="flex items-start gap-2.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            Semua data kasir, mutasi bank, dan diskrepansi untuk sesi ini akan <strong>ikut terhapus permanen</strong>.
+            Anda dapat membuat ulang sesi dengan tanggal yang sama setelahnya.
+          </span>
+        </div>
+
+        {error && (
+          <p className="text-sm text-red-600 font-medium">{error}</p>
+        )}
+
+        <DialogFooter className="mt-1">
+          <Button variant="outline" onClick={onClose} disabled={deleting}>Batal</Button>
+          <Button variant="destructive" onClick={handleDelete} disabled={deleting} className="gap-1.5">
+            {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            {deleting ? 'Menghapus...' : 'Hapus Sesi'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
@@ -90,6 +172,7 @@ export default function HistoryPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [userRole, setUserRole] = useState('')
 
   const [searchOutlet, setSearchOutlet] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -97,21 +180,30 @@ export default function HistoryPage() {
   const [sortField, setSortField] = useState<SortField>('sessionDate')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
+  const [deleteTarget, setDeleteTarget] = useState<SessionRow | null>(null)
+
   useEffect(() => {
-    async function fetchSessions() {
+    async function init() {
       setLoading(true)
       setError('')
       try {
-        const res = await fetch('/api/sessions')
-        if (!res.ok) throw new Error('Gagal memuat riwayat sesi.')
-        setSessions(await res.json())
+        const [sessRes, authRes] = await Promise.all([
+          fetch('/api/sessions'),
+          fetch('/api/auth/session'),
+        ])
+        if (!sessRes.ok) throw new Error('Gagal memuat riwayat sesi.')
+        setSessions(await sessRes.json())
+        if (authRes.ok) {
+          const s = await authRes.json()
+          setUserRole((s?.user as { role?: string })?.role ?? '')
+        }
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Terjadi kesalahan.')
       } finally {
         setLoading(false)
       }
     }
-    fetchSessions()
+    init()
   }, [])
 
   function toggleSort(field: SortField) {
@@ -121,6 +213,11 @@ export default function HistoryPage() {
       setSortField(field)
       setSortDir('desc')
     }
+  }
+
+  function handleDeleted(id: string) {
+    setSessions((prev) => prev.filter((s) => s.id !== id))
+    setDeleteTarget(null)
   }
 
   const filtered = useMemo(() => {
@@ -374,7 +471,7 @@ export default function HistoryPage() {
 
                     {/* Action */}
                     <td className="px-4 py-3 text-right">
-                      <ActionCell s={s} />
+                      <ActionCell s={s} userRole={userRole} onDelete={setDeleteTarget} />
                     </td>
                   </tr>
                 ))}
@@ -382,6 +479,15 @@ export default function HistoryPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* ── Delete Confirm Dialog ── */}
+      {deleteTarget && (
+        <DeleteConfirmDialog
+          session={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={handleDeleted}
+        />
       )}
     </div>
   )
