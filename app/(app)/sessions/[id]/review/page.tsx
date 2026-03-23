@@ -278,7 +278,7 @@ export default function ReviewPage() {
       )}
 
       {/* Tabs */}
-      <div className="bg-white rounded-t-xl border border-slate-200 border-b-0">
+      <div className="bg-white rounded-xl border border-slate-200">
         <div className="flex border-b border-slate-200">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} className={cn(
@@ -293,54 +293,56 @@ export default function ReviewPage() {
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="bg-white border border-slate-200 border-t-0 rounded-b-xl overflow-hidden shadow-sm">
+        {/* Content */}
         {entries.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-400">
             <CheckCircle2 className="w-8 h-8 mb-2 opacity-30" />
             <p className="text-sm">Belum ada data rekonsiliasi.</p>
           </div>
         ) : (
-          <>
+          <div className="p-4 space-y-4">
             {blocks.map(block => (
-              <BlockSection
-                key={block}
-                block={block}
-                session={session}
-                kasirNames={kasirNames}
-                filteredEdcEntries={filteredEdcEntries.filter(e => e.blockType === block)}
-                allEdcEntries={edcEntries.filter(e => e.blockType === block)}
-                cashEntries={cashEntries.filter(e => e.blockType === block)}
-                discByEntryId={discByEntryId}
-                tab={tab}
-                isReadOnly={isReadOnly}
-                onResolve={setResolveTarget}
-              />
-            ))}
-
-            {/* Ringkasan Kasir — per block */}
-            {blocks.map(block => (
-              <RingkasanSection
-                key={`ringkasan-${block}`}
-                block={block}
-                kasirNames={kasirNames}
-                allEntries={entries.filter(e => e.blockType === block)}
-              />
+              <div key={block} className="space-y-3">
+                {/* Block breakdown card */}
+                <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                  <BlockSection
+                    block={block}
+                    session={session}
+                    kasirNames={kasirNames}
+                    filteredEdcEntries={filteredEdcEntries.filter(e => e.blockType === block)}
+                    allEdcEntries={edcEntries.filter(e => e.blockType === block)}
+                    cashEntries={cashEntries.filter(e => e.blockType === block)}
+                    discByEntryId={discByEntryId}
+                    tab={tab}
+                    isReadOnly={isReadOnly}
+                    onResolve={setResolveTarget}
+                  />
+                </div>
+                {/* Ringkasan immediately follows its block */}
+                <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                  <RingkasanSection
+                    block={block}
+                    kasirNames={kasirNames}
+                    allEntries={entries.filter(e => e.blockType === block)}
+                  />
+                </div>
+              </div>
             ))}
 
             {/* Unexpected mutations */}
             {(tab === 'all' || tab === 'attention') && unexpected.length > 0 && (
-              <UnexpectedSection
-                unexpected={unexpected}
-                session={session}
-                discByMutationId={discByMutationId}
-                isReadOnly={isReadOnly}
-                onResolve={setResolveTarget}
-              />
+              <div className="rounded-xl border border-orange-200 overflow-hidden shadow-sm">
+                <UnexpectedSection
+                  unexpected={unexpected}
+                  session={session}
+                  discByMutationId={discByMutationId}
+                  isReadOnly={isReadOnly}
+                  onResolve={setResolveTarget}
+                />
+              </div>
             )}
-          </>
+          </div>
         )}
       </div>
 
@@ -400,7 +402,7 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
   if (filteredEdcEntries.length === 0 && !showCash) return null
 
   return (
-    <div className="border-b border-slate-200 last:border-0">
+    <div>
       {/* Block header */}
       <div className={cn('px-4 py-2 flex items-center justify-between', blockColor)}>
         <span className="text-white font-bold text-sm">{blockLabel} — {new Date(session.sessionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}</span>
@@ -412,6 +414,7 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
       </div>
 
       {/* Per-bank EDC sections */}
+      <div className="p-3 space-y-3">
       {(tab === 'all' ? allBanks : banks).map(bank => {
         const bankFiltered = filteredEdcEntries.filter(e => e.bankName === bank)
         const bankAll = allEdcEntries.filter(e => e.bankName === bank)
@@ -423,9 +426,9 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
         const selisih = bankCRTotal - kasirTotal
 
         return (
-          <div key={bank} className="border-b border-slate-100 last:border-0">
+          <div key={bank} className="rounded-lg border border-slate-200 overflow-hidden shadow-sm">
             {/* Bank section header */}
-            <div className={cn('px-4 py-2 flex items-center justify-between text-xs border-b border-slate-100', bankSectionBg(bank))}>
+            <div className={cn('px-4 py-2 flex items-center justify-between text-xs', bankSectionBg(bank))}>
               <span className={cn('font-bold text-sm', bankTextColor(bank))}>{bank} <span className="font-normal text-slate-400">{bankAll.length} entri</span></span>
               <div className="flex items-center gap-4 text-slate-500">
                 <span>Kasir <span className="font-semibold text-slate-700">{formatRupiah(kasirTotal)}</span></span>
@@ -439,28 +442,16 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
               <table className="w-full text-sm border-collapse" style={{ minWidth: `${480 + kasirNames.length * 90}px` }}>
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-16">Kode</th>
-                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-36">Bank / Terminal</th>
-                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-14">Jenis</th>
-                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-40">Entitas</th>
+                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-16">Kode</th>
+                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-36">Bank / Terminal</th>
+                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-14">Jenis</th>
+                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-40">Entitas</th>
                     {kasirNames.map(k => (
-                      <th key={k} className="px-2 py-1.5 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-20">{k}</th>
+                      <th key={k} className="px-2 py-1.5 text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-20">{k}</th>
                     ))}
-                    <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-24">Total</th>
-                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-44">Status Bank</th>
+                    <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-24 bg-slate-100">Total</th>
+                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-44">Status Bank</th>
                   </tr>
-                  {/* KASIR BERTUGAS row */}
-                  {kasirNames.length > 0 && (
-                    <tr className="bg-emerald-50 border-b border-emerald-100">
-                      <td className="px-3 py-1" colSpan={4}>
-                        <span className="text-[10px] text-emerald-600 font-semibold">↑ KASIR BERTUGAS:</span>
-                      </td>
-                      {kasirNames.map(k => (
-                        <td key={k} className="px-2 py-1 text-right text-[10px] font-bold text-emerald-700">{k}</td>
-                      ))}
-                      <td className="px-3 py-1" /><td className="px-3 py-1" />
-                    </tr>
-                  )}
                 </thead>
                 <tbody>
                   {displayEntries.map((entry, idx) => {
@@ -485,46 +476,51 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
           </div>
         )
       })}
+      </div>{/* end space-y-3 bank cards */}
 
       {/* CASH / VOUCHER rows */}
       {showCash && cashEntries.length > 0 && (
-        <div className="overflow-x-auto border-b border-slate-100">
-          <table className="w-full text-sm border-collapse" style={{ minWidth: `${480 + kasirNames.length * 90}px` }}>
-            <tbody>
-              {cashEntries.map(entry => (
-                <tr key={entry.id} className={cn('border-b border-slate-50 last:border-0', entry.paymentType === 'CASH' ? 'bg-emerald-50/50' : 'bg-amber-50/50')}>
-                  <td className="px-3 py-2 w-16 text-slate-400 text-[11px] font-mono">—</td>
-                  <td className="px-3 py-2 w-36">
-                    <TypeBadge type={entry.paymentType} />
-                    {entry.paymentType === 'VOUCHER' && entry.terminalCode && (
-                      <span className="text-[10px] text-slate-500 ml-1">{entry.terminalCode}</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 w-14" />
-                  <td className="px-3 py-2 w-40 text-[11px] text-slate-500">{entry.entityNameRaw !== '-' ? entry.entityNameRaw : ''}</td>
-                  {kasirNames.map(k => {
-                    const amt = entry.perKasirAmounts?.[k] ?? 0
-                    return (
-                      <td key={k} className={cn('px-2 py-2 w-20 text-right text-[12px] font-mono tabular-nums', amt > 0 ? 'font-semibold text-slate-800' : 'text-slate-300')}>
-                        {amt > 0 ? formatRupiah(amt) : '—'}
+        <div className="px-3 pb-3">
+          <div className="rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse" style={{ minWidth: `${480 + kasirNames.length * 90}px` }}>
+                <tbody>
+                  {cashEntries.map(entry => (
+                    <tr key={entry.id} className={cn('border-b border-slate-50 last:border-0', entry.paymentType === 'CASH' ? 'bg-emerald-50/50' : 'bg-amber-50/50')}>
+                      <td className="px-3 py-2 w-16 text-slate-500 text-[11px] font-mono">—</td>
+                      <td className="px-3 py-2 w-36">
+                        <TypeBadge type={entry.paymentType} />
+                        {entry.paymentType === 'VOUCHER' && entry.terminalCode && (
+                          <span className="text-[10px] text-slate-500 ml-1">{entry.terminalCode}</span>
+                        )}
                       </td>
-                    )
-                  })}
-                  <td className="px-3 py-2 w-24 text-right text-[12px] font-mono font-bold tabular-nums text-slate-700">{formatRupiah(entry.amount)}</td>
-                  <td className="px-3 py-2 w-44">
-                    <span className={cn('text-[11px] flex items-center gap-1', entry.paymentType === 'CASH' ? 'text-emerald-600' : 'text-amber-600')}>
-                      {entry.paymentType === 'CASH' ? <><Banknote className="w-3.5 h-3.5" />Kas Fisik</> : <><Tag className="w-3.5 h-3.5" />Voucher</>}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      <td className="px-3 py-2 w-14" />
+                      <td className="px-3 py-2 w-40 text-[11px] text-slate-600">{entry.entityNameRaw !== '-' ? entry.entityNameRaw : ''}</td>
+                      {kasirNames.map(k => {
+                        const amt = entry.perKasirAmounts?.[k] ?? 0
+                        return (
+                          <td key={k} className={cn('px-2 py-2 w-20 text-right text-[12px] font-mono tabular-nums', amt > 0 ? 'font-semibold text-slate-800' : 'text-slate-300')}>
+                            {amt > 0 ? formatRupiah(amt) : '—'}
+                          </td>
+                        )
+                      })}
+                      <td className="px-3 py-2 w-24 text-right text-[12px] font-mono font-bold tabular-nums text-slate-700 bg-slate-50">{formatRupiah(entry.amount)}</td>
+                      <td className="px-3 py-2 w-44">
+                        <span className={cn('text-[11px] flex items-center gap-1', entry.paymentType === 'CASH' ? 'text-emerald-600' : 'text-amber-600')}>
+                          {entry.paymentType === 'CASH' ? <><Banknote className="w-3.5 h-3.5" />Kas Fisik</> : <><Tag className="w-3.5 h-3.5" />Voucher</>}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
       {/* SUBTOTAL row */}
-      <div className="overflow-x-auto" style={{ minWidth: `${480 + kasirNames.length * 90}px` }}>
+      <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse" style={{ minWidth: `${480 + kasirNames.length * 90}px` }}>
           <tbody>
             <tr className="bg-slate-800">
@@ -584,8 +580,8 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, read
 
       {/* Entitas */}
       <td className="px-3 py-2 w-40">
-        <div className="text-[11px] text-slate-500 leading-tight truncate max-w-[150px]">{entry.entityNameRaw}</div>
-        {entry.notaBill && <div className="text-[10px] text-slate-400 font-mono">nota: {entry.notaBill}</div>}
+        <div className="text-[11px] text-slate-600 leading-tight truncate max-w-[150px]">{entry.entityNameRaw}</div>
+        {entry.notaBill && <div className="text-[10px] text-slate-500 font-mono">nota: {entry.notaBill}</div>}
       </td>
 
       {/* Per-kasir amounts */}
@@ -599,7 +595,7 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, read
       })}
 
       {/* Total */}
-      <td className={cn('px-3 py-2 w-24 text-right text-[12px] font-mono font-bold tabular-nums', isZero ? 'text-slate-400' : 'text-slate-800')}>
+      <td className={cn('px-3 py-2 w-24 text-right text-[12px] font-mono font-bold tabular-nums bg-slate-50', isZero ? 'text-slate-400' : 'text-slate-800')}>
         {Number(entry.amount) > 0 ? formatRupiah(entry.amount) : '—'}
       </td>
 
@@ -710,7 +706,7 @@ function RingkasanSection({ block, kasirNames, allEntries }: {
   }
 
   return (
-    <div className="border-b border-slate-200 last:border-0">
+    <div>
       <div className="bg-slate-800 px-4 py-2 flex items-center justify-between">
         <span className="text-white font-bold text-sm">📊 Ringkasan Kasir — {block}</span>
         <span className="text-slate-400 text-[10px]">Baris kuning = input manual (tidak tersedia) · Baris hijau = formula otomatis</span>
