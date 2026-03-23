@@ -231,7 +231,7 @@ export default function ReviewPage() {
     { id: 'matched', label: 'Cocok Saja', count: matchedEntries.length },
   ]
 
-  const blocks: Array<'REG' | 'EV'> = Array.from(new Set(entries.map(e => e.blockType as 'REG' | 'EV'))).sort()
+  const blocks: Array<'REG' | 'EV'> = Array.from(new Set(entries.map(e => e.blockType as 'REG' | 'EV'))).sort((a, b) => a === 'REG' ? -1 : 1)
 
   return (
     <div className="p-4 max-w-[1600px] mx-auto">
@@ -329,22 +329,22 @@ export default function ReviewPage() {
                 </div>
               </div>
             ))}
-
-            {/* Unexpected mutations */}
-            {(tab === 'all' || tab === 'attention') && unexpected.length > 0 && (
-              <div className="rounded-xl border border-orange-200 overflow-hidden shadow-sm">
-                <UnexpectedSection
-                  unexpected={unexpected}
-                  session={session}
-                  discByMutationId={discByMutationId}
-                  isReadOnly={isReadOnly}
-                  onResolve={setResolveTarget}
-                />
-              </div>
-            )}
           </div>
         )}
       </div>
+
+      {/* Unexpected mutations — outside main card */}
+      {(tab === 'all' || tab === 'attention') && entries.length > 0 && unexpected.length > 0 && (
+        <div className="mt-4 rounded-xl border border-orange-200 overflow-hidden shadow-sm">
+          <UnexpectedSection
+            unexpected={unexpected}
+            session={session}
+            discByMutationId={discByMutationId}
+            isReadOnly={isReadOnly}
+            onResolve={setResolveTarget}
+          />
+        </div>
+      )}
 
       {/* Dialogs */}
       <Dialog open={showRerunConfirm} onOpenChange={setShowRerunConfirm}>
@@ -449,7 +449,7 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
                     {kasirNames.map(k => (
                       <th key={k} className="px-2 py-1.5 text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-20">{k}</th>
                     ))}
-                    <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-24 bg-slate-100">Total</th>
+                    <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-600 uppercase tracking-wide w-24 bg-slate-200">Total</th>
                     <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-44">Status Bank</th>
                   </tr>
                 </thead>
@@ -504,7 +504,7 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
                           </td>
                         )
                       })}
-                      <td className="px-3 py-2 w-24 text-right text-[12px] font-mono font-bold tabular-nums text-slate-700 bg-slate-50">{formatRupiah(entry.amount)}</td>
+                      <td className="px-3 py-2 w-24 text-right text-[12px] font-mono font-bold tabular-nums text-slate-700 bg-slate-100">{formatRupiah(entry.amount)}</td>
                       <td className="px-3 py-2 w-44">
                         <span className={cn('text-[11px] flex items-center gap-1', entry.paymentType === 'CASH' ? 'text-emerald-600' : 'text-amber-600')}>
                           {entry.paymentType === 'CASH' ? <><Banknote className="w-3.5 h-3.5" />Kas Fisik</> : <><Tag className="w-3.5 h-3.5" />Voucher</>}
@@ -559,14 +559,14 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, read
   const isMatched = entry.matchStatus === 'matched'
   const discResolved = discrepancy?.status === 'resolved'
 
-  const rowBg = isUnmatched && !discResolved ? 'bg-red-50/40' : isMismatch && !discResolved ? 'bg-amber-50/40' : isZero ? 'bg-slate-50/60' : ''
+  const rowBg = isUnmatched && !discResolved ? 'bg-red-50/60' : isMismatch && !discResolved ? 'bg-amber-50/60' : isZero ? 'bg-slate-50/80' : ''
 
   return (
-    <tr className={cn('border-b border-slate-50 hover:bg-blue-50/20 transition-colors', isLast && 'border-0', rowBg)}>
+    <tr className={cn('border-b border-slate-100 hover:brightness-[0.97] hover:bg-slate-100/60 transition-colors cursor-default', isLast && 'border-0', rowBg)}>
       {/* Kode */}
       <td className="px-3 py-2 w-16">
         <span className="text-[11px] font-mono text-slate-500">{entry.terminalCode ?? '—'}</span>
-        {entry.sourceRow && <div className="text-[9px] text-slate-300">baris {entry.sourceRow}</div>}
+        {entry.sourceRow && <div className="text-[9px] text-slate-500">baris {entry.sourceRow}</div>}
       </td>
 
       {/* Bank / Terminal */}
@@ -580,7 +580,7 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, read
 
       {/* Entitas */}
       <td className="px-3 py-2 w-40">
-        <div className="text-[11px] text-slate-600 leading-tight truncate max-w-[150px]">{entry.entityNameRaw}</div>
+        <div className="text-[11px] text-slate-600 leading-tight truncate max-w-[150px]" title={entry.entityNameRaw ?? undefined}>{entry.entityNameRaw}</div>
         {entry.notaBill && <div className="text-[10px] text-slate-500 font-mono">nota: {entry.notaBill}</div>}
       </td>
 
@@ -595,7 +595,7 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, read
       })}
 
       {/* Total */}
-      <td className={cn('px-3 py-2 w-24 text-right text-[12px] font-mono font-bold tabular-nums bg-slate-50', isZero ? 'text-slate-400' : 'text-slate-800')}>
+      <td className={cn('px-3 py-2 w-24 text-right text-[12px] font-mono font-bold tabular-nums bg-slate-100', isZero ? 'text-slate-400' : 'text-slate-800')}>
         {Number(entry.amount) > 0 ? formatRupiah(entry.amount) : '—'}
       </td>
 
@@ -610,7 +610,7 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, read
               {formatRupiah(entry.bankMutation.grossAmount)} · {new Date(entry.bankMutation.transactionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' })} {settlementBadge(entry.bankMutation.transactionDate, sessionDate)}
             </div>
             {entry.bankMutation.description && (
-              <div className="text-[10px] text-slate-400 truncate max-w-[160px]">{entry.bankMutation.description}</div>
+              <div className="text-[10px] text-slate-500 truncate max-w-[160px]" title={entry.bankMutation.description}>{entry.bankMutation.description}</div>
             )}
           </div>
         ) : isMismatch && entry.bankMutation ? (
