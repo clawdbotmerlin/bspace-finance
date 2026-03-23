@@ -359,9 +359,10 @@ export default function DiscrepanciesPage() {
           d.id === updated.id ? updated : d,
         ),
         summary: {
-          open: prev.summary.open + (updated.status === 'open' ? 1 : 0) - (prev.discrepancies.find(d => d.id === updated.id)?.status === 'open' ? 1 : 0),
+          open:          prev.summary.open          + (updated.status === 'open'          ? 1 : 0) - (prev.discrepancies.find(d => d.id === updated.id)?.status === 'open'          ? 1 : 0),
           investigating: prev.summary.investigating + (updated.status === 'investigating' ? 1 : 0) - (prev.discrepancies.find(d => d.id === updated.id)?.status === 'investigating' ? 1 : 0),
-          resolved: prev.summary.resolved + (updated.status === 'resolved' ? 1 : 0) - (prev.discrepancies.find(d => d.id === updated.id)?.status === 'resolved' ? 1 : 0),
+          resolved:      prev.summary.resolved      + (updated.status === 'resolved'      ? 1 : 0) - (prev.discrepancies.find(d => d.id === updated.id)?.status === 'resolved'      ? 1 : 0),
+          ignored:       prev.summary.ignored       + (updated.status === 'ignored'       ? 1 : 0) - (prev.discrepancies.find(d => d.id === updated.id)?.status === 'ignored'       ? 1 : 0),
         },
       }
     })
