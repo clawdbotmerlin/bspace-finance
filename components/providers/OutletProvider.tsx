@@ -6,8 +6,6 @@ export interface Outlet {
   id: string
   name: string
   code: string
-  entityId: string
-  entityName?: string
 }
 
 interface OutletContextValue {

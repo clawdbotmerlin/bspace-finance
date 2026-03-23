@@ -87,7 +87,7 @@ model Entity {
 
 model Outlet {
   id        String   @id @default(cuid())
-  entityId  String
+  entityId  String?
   name      String
   code      String   @unique
   address   String?
@@ -95,7 +95,7 @@ model Outlet {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  entity       Entity                   @relation(fields: [entityId], references: [id])
+  entity       Entity?                  @relation(fields: [entityId], references: [id])
   edcTerminals EdcTerminal[]
   sessions     ReconciliationSession[]
   users        User[]

@@ -30,8 +30,6 @@ interface Outlet {
   code: string
   address: string | null
   isActive: boolean
-  entityId: string
-  entityName: string
   terminalCount: number
 }
 
@@ -139,7 +137,7 @@ export default function MasterDataPage() {
             <EntitiesTab entities={entities} onRefresh={fetchAll} />
           )}
           {tab === 'outlets' && (
-            <OutletsTab outlets={outlets} entities={entities} onRefresh={fetchAll} />
+            <OutletsTab outlets={outlets} onRefresh={fetchAll} />
           )}
           {tab === 'terminals' && (
             <TerminalsTab terminals={terminals} outlets={outlets} onRefresh={fetchAll} />
@@ -294,9 +292,8 @@ function EntityDialog({ entity, open, onClose, onSaved }: {
 
 // ─── Outlets Tab ──────────────────────────────────────────────────────────────
 
-function OutletsTab({ outlets, entities, onRefresh }: {
+function OutletsTab({ outlets, onRefresh }: {
   outlets: Outlet[]
-  entities: Entity[]
   onRefresh: () => void
 }) {
   const [createOpen, setCreateOpen] = useState(false)
@@ -327,7 +324,6 @@ function OutletsTab({ outlets, entities, onRefresh }: {
             <tr className="border-b bg-slate-50 text-slate-600 text-left">
               <th className="px-4 py-3 font-medium">Nama Outlet</th>
               <th className="px-4 py-3 font-medium">Kode</th>
-              <th className="px-4 py-3 font-medium">Entitas</th>
               <th className="px-4 py-3 font-medium">Terminal</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium w-20">Aksi</th>
@@ -335,14 +331,13 @@ function OutletsTab({ outlets, entities, onRefresh }: {
           </thead>
           <tbody>
             {outlets.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Belum ada outlet.</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">Belum ada outlet.</td></tr>
             ) : outlets.map((o) => (
               <tr key={o.id} className={cn('border-b last:border-0', !o.isActive && 'opacity-50')}>
                 <td className="px-4 py-3 font-medium text-slate-800">{o.name}</td>
                 <td className="px-4 py-3">
                   <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">{o.code}</span>
                 </td>
-                <td className="px-4 py-3 text-slate-600">{o.entityName}</td>
                 <td className="px-4 py-3 text-slate-500">{o.terminalCount} terminal</td>
                 <td className="px-4 py-3">
                   <Badge variant={o.isActive ? 'success' : 'outline'}>
@@ -367,14 +362,12 @@ function OutletsTab({ outlets, entities, onRefresh }: {
 
       <OutletDialog
         open={createOpen}
-        entities={entities}
         onClose={() => setCreateOpen(false)}
         onSaved={() => { setCreateOpen(false); onRefresh() }}
       />
       {editOutlet && (
         <OutletDialog
           outlet={editOutlet}
-          entities={entities}
           open
           onClose={() => setEditOutlet(null)}
           onSaved={() => { setEditOutlet(null); onRefresh() }}
@@ -384,9 +377,8 @@ function OutletsTab({ outlets, entities, onRefresh }: {
   )
 }
 
-function OutletDialog({ outlet, entities, open, onClose, onSaved }: {
+function OutletDialog({ outlet, open, onClose, onSaved }: {
   outlet?: Outlet
-  entities: Entity[]
   open: boolean
   onClose: () => void
   onSaved: () => void
@@ -394,7 +386,6 @@ function OutletDialog({ outlet, entities, open, onClose, onSaved }: {
   const [name, setName] = useState(outlet?.name ?? '')
   const [code, setCode] = useState(outlet?.code ?? '')
   const [address, setAddress] = useState(outlet?.address ?? '')
-  const [entityId, setEntityId] = useState(outlet?.entityId ?? '')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -407,7 +398,7 @@ function OutletDialog({ outlet, entities, open, onClose, onSaved }: {
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, code: code.toUpperCase(), address: address || null, entityId }),
+      body: JSON.stringify({ name, code: code.toUpperCase(), address: address || null }),
     })
     setSaving(false)
     if (res.ok) {
@@ -425,17 +416,6 @@ function OutletDialog({ outlet, entities, open, onClose, onSaved }: {
           <DialogTitle>{outlet ? 'Edit Outlet' : 'Tambah Outlet'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          <div className="space-y-1.5">
-            <Label>Entitas</Label>
-            <Select value={entityId} onValueChange={setEntityId} required>
-              <SelectTrigger><SelectValue placeholder="Pilih entitas..." /></SelectTrigger>
-              <SelectContent>
-                {entities.filter((e) => e.isActive).map((e) => (
-                  <SelectItem key={e.id} value={e.id}>{e.legalName}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
           <div className="space-y-1.5">
             <Label>Nama Outlet</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Canna" />
