@@ -128,13 +128,9 @@ export function Navbar({ userName, userRole }: NavbarProps) {
                   <DropdownMenuItem
                     key={outlet.id}
                     onClick={() => setSelectedOutlet(outlet)}
-                    className={cn(
-                      'flex flex-col items-start gap-0.5',
-                      outlet.id === selectedOutlet?.id && 'bg-accent'
-                    )}
+                    className={cn(outlet.id === selectedOutlet?.id && 'bg-accent')}
                   >
                     <span className="font-medium text-xs">{outlet.name}</span>
-                    <span className="text-[11px] text-muted-foreground">{outlet.entityName}</span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
