@@ -104,8 +104,12 @@ export function runMatchingEngine(
       continue
     }
 
-    // Pick the candidate with the smallest absolute amount difference
-    const best = candidates.reduce((a, b) =>
+    // Prefer candidates where bank <= cashier (MDR always deducted from settlement).
+    // Among those, pick smallest absolute diff. Only fall back to bank > cashier if no
+    // under-or-equal candidate exists.
+    const underCandidates = candidates.filter((m) => m.grossAmount <= amount)
+    const pool = underCandidates.length > 0 ? underCandidates : candidates
+    const best = pool.reduce((a, b) =>
       Math.abs(a.grossAmount - amount) <= Math.abs(b.grossAmount - amount) ? a : b,
     )
 
