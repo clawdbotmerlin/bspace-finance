@@ -675,6 +675,8 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
   // If nothing to show
   if (filteredEdcEntries.length === 0 && !showCash) return null
 
+  const totalCols = 4 + kasirNames.length + 2
+
   return (
     <div>
       {/* Block header */}
@@ -687,105 +689,115 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
         </span>
       </div>
 
-      {/* Per-bank EDC sections */}
-      <div className="p-3 space-y-3">
-      {(tab === 'all' ? allBanks : banks).map(bank => {
-        const bankFiltered = filteredEdcEntries.filter(e => e.bankName === bank)
-        const bankAll = allEdcEntries.filter(e => e.bankName === bank)
-        const displayEntries = tab === 'all' ? bankAll : bankFiltered
-        if (displayEntries.length === 0) return null
+      {/* Single unified table — all banks + cash/voucher + subtotal share identical column widths */}
+      <div className="px-3 pb-3 pt-3">
+        <div className="rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse table-fixed" style={{ minWidth: `${480 + kasirNames.length * 90}px` }}>
+              <colgroup>
+                <col style={{ width: '64px' }} />
+                <col style={{ width: '144px' }} />
+                <col style={{ width: '56px' }} />
+                <col style={{ width: '160px' }} />
+                {kasirNames.map(k => <col key={k} style={{ width: '80px' }} />)}
+                <col style={{ width: '96px' }} />
+                <col style={{ width: '176px' }} />
+              </colgroup>
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Kode</th>
+                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Bank / Terminal</th>
+                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Jenis</th>
+                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Entitas</th>
+                  {kasirNames.map(k => (
+                    <th key={k} className="px-2 py-1.5 text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{k}</th>
+                  ))}
+                  <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-600 uppercase tracking-wide bg-slate-200">Total</th>
+                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Status Bank</th>
+                </tr>
+              </thead>
 
-        const kasirTotal = bankAll.reduce((s, e) => s + Number(e.amount), 0)
-        const bankCRTotal = bankAll.reduce((s, e) => s + Number(e.bankMutation?.grossAmount ?? 0), 0)
-        const selisih = bankCRTotal - kasirTotal
+              {/* Per-bank sections as separate <tbody> groups */}
+              {(tab === 'all' ? allBanks : banks).map(bank => {
+                const bankFiltered = filteredEdcEntries.filter(e => e.bankName === bank)
+                const bankAll = allEdcEntries.filter(e => e.bankName === bank)
+                const displayEntries = tab === 'all' ? bankAll : bankFiltered
+                if (displayEntries.length === 0) return null
 
-        return (
-          <div key={bank} className="rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-            {/* Bank section header */}
-            <div className={cn('px-4 py-2 flex items-center justify-between text-xs', bankSectionBg(bank))}>
-              <span className={cn('font-bold text-sm', bankTextColor(bank))}>{bank} <span className="font-normal text-slate-400">{bankAll.length} entri</span></span>
-              <div className="flex items-center gap-4 text-slate-500">
-                <span>Kasir <span className="font-semibold text-slate-700">{formatRupiah(kasirTotal)}</span></span>
-                <span>Bank CR <span className="font-semibold text-slate-700">{formatRupiah(bankCRTotal)}</span></span>
-                <span>Selisih <span className={cn('font-semibold', Math.abs(Math.round(selisih)) > 0 ? 'text-red-600' : 'text-emerald-600')}>{formatRupiah(selisih)}</span></span>
-              </div>
-            </div>
+                const kasirTotal = bankAll.reduce((s, e) => s + Number(e.amount), 0)
+                const bankCRTotal = bankAll.reduce((s, e) => s + Number(e.bankMutation?.grossAmount ?? 0), 0)
+                const selisih = bankCRTotal - kasirTotal
 
-            {/* Scrollable table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse" style={{ minWidth: `${480 + kasirNames.length * 90}px` }}>
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-16">Kode</th>
-                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-36">Bank / Terminal</th>
-                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-14">Jenis</th>
-                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-40">Entitas</th>
-                    {kasirNames.map(k => (
-                      <th key={k} className="px-2 py-1.5 text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-20">{k}</th>
-                    ))}
-                    <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-600 uppercase tracking-wide w-24 bg-slate-200">Total</th>
-                    <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide w-44">Status Bank</th>
+                return (
+                  <tbody key={bank}>
+                    {/* Bank section header row */}
+                    <tr className={cn('border-t border-slate-200', bankSectionBg(bank))}>
+                      <td colSpan={totalCols} className="px-4 py-2">
+                        <div className="flex items-center justify-between">
+                          <span className={cn('font-bold text-sm', bankTextColor(bank))}>{bank} <span className="font-normal text-slate-400">{bankAll.length} entri</span></span>
+                          <div className="flex items-center gap-4 text-xs text-slate-500">
+                            <span>Kasir <span className="font-semibold text-slate-700">{formatRupiah(kasirTotal)}</span></span>
+                            <span>Bank CR <span className="font-semibold text-slate-700">{formatRupiah(bankCRTotal)}</span></span>
+                            <span>Selisih <span className={cn('font-semibold', Math.abs(Math.round(selisih)) > 0 ? 'text-red-600' : 'text-emerald-600')}>{formatRupiah(selisih)}</span></span>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                    {displayEntries.map((entry, idx) => {
+                      const disc = discByEntryId.get(entry.id) ?? null
+                      const isLast = idx === displayEntries.length - 1
+                      return (
+                        <EntryRow
+                          key={entry.id}
+                          entry={entry}
+                          kasirNames={kasirNames}
+                          discrepancy={disc}
+                          sessionDate={session.sessionDate}
+                          onResolve={onResolve}
+                          onIgnore={onIgnore}
+                          ignoringIds={ignoringIds}
+                          readOnly={isReadOnly}
+                          isLast={isLast}
+                        />
+                      )
+                    })}
+                  </tbody>
+                )
+              })}
+
+              {/* CASH / VOUCHER rows */}
+              {showCash && cashEntries.length > 0 && (
+                <tbody>
+                  <tr className="border-t border-slate-200 bg-slate-50">
+                    <td colSpan={totalCols} className="px-4 py-1.5">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Kas &amp; Voucher</span>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {displayEntries.map((entry, idx) => {
-                    const disc = discByEntryId.get(entry.id) ?? null
-                    const isLast = idx === displayEntries.length - 1
-                    return (
-                      <EntryRow
-                        key={entry.id}
-                        entry={entry}
-                        kasirNames={kasirNames}
-                        discrepancy={disc}
-                        sessionDate={session.sessionDate}
-                        onResolve={onResolve}
-                        onIgnore={onIgnore}
-                        ignoringIds={ignoringIds}
-                        readOnly={isReadOnly}
-                        isLast={isLast}
-                      />
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )
-      })}
-      </div>{/* end space-y-3 bank cards */}
-
-      {/* CASH / VOUCHER rows */}
-      {showCash && cashEntries.length > 0 && (
-        <div className="px-3 pb-3">
-          <div className="rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse" style={{ minWidth: `${480 + kasirNames.length * 90}px` }}>
-                <tbody>
                   {cashEntries.map(entry => (
                     <tr key={entry.id} className={cn('border-b border-slate-50 last:border-0', entry.paymentType === 'CASH' ? 'bg-emerald-50/50' : 'bg-amber-50/50')}>
-                      <td className="px-3 py-2 w-16 text-slate-500 text-[11px] font-mono">—</td>
-                      <td className="px-3 py-2 w-36">
+                      <td className="px-3 py-2 text-slate-500 text-[11px] font-mono">—</td>
+                      <td className="px-3 py-2">
                         {entry.paymentType === 'VOUCHER' ? (
                           <>
-                            {entry.terminalId && <div className="text-[12px] font-semibold text-slate-800">{entry.terminalId}</div>}
-                            {entry.terminalCode && <div className="text-[10px] font-mono text-slate-500">{entry.terminalCode}</div>}
+                            {entry.terminalId && <div className="text-[12px] font-semibold text-slate-800 truncate">{entry.terminalId}</div>}
+                            {entry.terminalCode && <div className="text-[10px] font-mono text-slate-500 truncate">{entry.terminalCode}</div>}
                           </>
                         ) : (
                           <span className="text-[11px] text-slate-400">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 w-14"><TypeBadge type={entry.paymentType} /></td>
-                      <td className="px-3 py-2 w-40 text-[11px] text-slate-600">{entry.entityNameRaw !== '-' ? entry.entityNameRaw : ''}</td>
+                      <td className="px-3 py-2"><TypeBadge type={entry.paymentType} /></td>
+                      <td className="px-3 py-2 text-[11px] text-slate-600 truncate">{entry.entityNameRaw !== '-' ? entry.entityNameRaw : ''}</td>
                       {kasirNames.map(k => {
                         const amt = entry.perKasirAmounts?.[k] ?? 0
                         return (
-                          <td key={k} className={cn('px-2 py-2 w-20 text-right text-[12px] font-mono tabular-nums', amt > 0 ? 'font-semibold text-slate-800' : 'text-slate-300')}>
+                          <td key={k} className={cn('px-2 py-2 text-right text-[12px] font-mono tabular-nums', amt > 0 ? 'font-semibold text-slate-800' : 'text-slate-300')}>
                             {amt > 0 ? formatRupiah(amt) : '—'}
                           </td>
                         )
                       })}
-                      <td className="px-3 py-2 w-24 text-right text-[12px] font-mono font-bold tabular-nums text-slate-700 bg-slate-100">{formatRupiah(entry.amount)}</td>
-                      <td className="px-3 py-2 w-44">
+                      <td className="px-3 py-2 text-right text-[12px] font-mono font-bold tabular-nums text-slate-700 bg-slate-100">{formatRupiah(entry.amount)}</td>
+                      <td className="px-3 py-2">
                         <span className={cn('text-[11px] flex items-center gap-1', entry.paymentType === 'CASH' ? 'text-emerald-600' : 'text-amber-600')}>
                           {entry.paymentType === 'CASH' ? <><Banknote className="w-3.5 h-3.5" />Kas Fisik</> : <><Tag className="w-3.5 h-3.5" />Voucher</>}
                         </span>
@@ -793,30 +805,26 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+              )}
+
+              {/* SUBTOTAL row */}
+              <tbody>
+                <tr className="bg-slate-800 border-t-2 border-slate-600">
+                  <td className="px-3 py-2" />
+                  <td className="px-3 py-2 text-white text-[11px] font-bold tracking-wide">SUBTOTAL — {block}</td>
+                  <td className="px-3 py-2" /><td className="px-3 py-2" />
+                  {kasirNames.map(k => (
+                    <td key={k} className="px-2 py-2 text-right text-[12px] font-mono font-semibold text-white tabular-nums">
+                      {subtotalByKasir[k] > 0 ? formatRupiah(subtotalByKasir[k]) : '0'}
+                    </td>
+                  ))}
+                  <td className="px-3 py-2 text-right text-[12px] font-mono font-bold text-white tabular-nums">{formatRupiah(subtotalTotal)}</td>
+                  <td className="px-3 py-2" />
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
-
-      {/* SUBTOTAL row */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse" style={{ minWidth: `${480 + kasirNames.length * 90}px` }}>
-          <tbody>
-            <tr className="bg-slate-800">
-              <td className="px-3 py-2 w-16" />
-              <td className="px-3 py-2 w-36 text-white text-[11px] font-bold tracking-wide">SUBTOTAL — {block}</td>
-              <td className="px-3 py-2 w-14" /><td className="px-3 py-2 w-40" />
-              {kasirNames.map(k => (
-                <td key={k} className="px-2 py-2 w-20 text-right text-[12px] font-mono font-semibold text-white tabular-nums">
-                  {subtotalByKasir[k] > 0 ? formatRupiah(subtotalByKasir[k]) : '0'}
-                </td>
-              ))}
-              <td className="px-3 py-2 w-24 text-right text-[12px] font-mono font-bold text-white tabular-nums">{formatRupiah(subtotalTotal)}</td>
-              <td className="px-3 py-2 w-44" />
-            </tr>
-          </tbody>
-        </table>
       </div>
     </div>
   )
