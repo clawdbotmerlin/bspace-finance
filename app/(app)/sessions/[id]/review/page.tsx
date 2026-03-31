@@ -1030,7 +1030,7 @@ function RingkasanSection({ block, kasirNames, allEntries }: {
             <RingRow label="TOTAL PAYMENT (bank + cash)" getVal={k => totals[k]?.totalPayment ?? 0} bold />
             <RingRow
               label="SELISIH (harus = 0, jika tidak nol → ada perbedaan)"
-              getVal={k => -(totals[k]?.totalPayment ?? 0)}
+              getVal={k => (totals[k]?.totalSales ?? 0) - (totals[k]?.totalPayment ?? 0)}
               highlight="red"
               bold
             />
