@@ -765,17 +765,16 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
                     <tr key={entry.id} className={cn('border-b border-slate-50 last:border-0', entry.paymentType === 'CASH' ? 'bg-emerald-50/50' : 'bg-amber-50/50')}>
                       <td className="px-3 py-2 w-16 text-slate-500 text-[11px] font-mono">—</td>
                       <td className="px-3 py-2 w-36">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <TypeBadge type={entry.paymentType} />
-                          {entry.paymentType === 'VOUCHER' && entry.terminalId && (
-                            <span className="text-[10px] font-medium text-amber-700">{entry.terminalId}</span>
-                          )}
-                        </div>
-                        {entry.paymentType === 'VOUCHER' && entry.terminalCode && (
-                          <div className="text-[10px] font-mono text-slate-500 mt-0.5">{entry.terminalCode}</div>
+                        {entry.paymentType === 'VOUCHER' ? (
+                          <>
+                            {entry.terminalId && <div className="text-[12px] font-semibold text-slate-800">{entry.terminalId}</div>}
+                            {entry.terminalCode && <div className="text-[10px] font-mono text-slate-500">{entry.terminalCode}</div>}
+                          </>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 w-14" />
+                      <td className="px-3 py-2 w-14"><TypeBadge type={entry.paymentType} /></td>
                       <td className="px-3 py-2 w-40 text-[11px] text-slate-600">{entry.entityNameRaw !== '-' ? entry.entityNameRaw : ''}</td>
                       {kasirNames.map(k => {
                         const amt = entry.perKasirAmounts?.[k] ?? 0
