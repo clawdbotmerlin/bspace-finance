@@ -877,7 +877,7 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, onIg
             <div className="text-[11px] text-slate-600 leading-tight truncate max-w-[150px] cursor-default">{entry.entityNameRaw}</div>
           </Tooltip>
         ) : null}
-        {entry.notaBill && <div className="text-[10px] text-slate-500 font-mono">nota: {entry.notaBill}</div>}
+        {entry.notaBill && <div className="text-[10px] text-slate-500 font-mono break-all whitespace-normal">nota: {entry.notaBill}</div>}
       </td>
 
       {/* Per-kasir amounts */}
