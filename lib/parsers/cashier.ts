@@ -243,10 +243,15 @@ export async function parseCashierFile(
         kasirName = names.length > 0 ? names.join(' / ') : null
       }
 
+      const voucherTerminalCode = cellStr(cells[0]) || null
+      const voucherProvider = colBStr.toUpperCase().startsWith('VOUCHER ')
+        ? (colBStr.slice(7).trim() || null)
+        : (colBStr.trim() || null)
+
       entries.push({
-        terminalCode: null,
+        terminalCode: voucherTerminalCode,
         bankName: 'VOUCHER',
-        terminalId: null,
+        terminalId: voucherProvider,
         paymentType: 'VOUCHER',
         amount,
         notaBill,

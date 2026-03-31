@@ -766,8 +766,11 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
                       <td className="px-3 py-2 w-16 text-slate-500 text-[11px] font-mono">—</td>
                       <td className="px-3 py-2 w-36">
                         <TypeBadge type={entry.paymentType} />
-                        {entry.paymentType === 'VOUCHER' && entry.terminalCode && (
-                          <span className="text-[10px] text-slate-500 ml-1">{entry.terminalCode}</span>
+                        {entry.paymentType === 'VOUCHER' && (entry.terminalId || entry.terminalCode) && (
+                          <div className="text-[10px] text-slate-500 mt-0.5 space-y-0.5">
+                            {entry.terminalId && <div className="font-medium text-amber-700">{entry.terminalId}</div>}
+                            {entry.terminalCode && <div className="font-mono">{entry.terminalCode}</div>}
+                          </div>
                         )}
                       </td>
                       <td className="px-3 py-2 w-14" />
