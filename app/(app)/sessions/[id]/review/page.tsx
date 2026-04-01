@@ -87,9 +87,10 @@ function TypeBadge({ type }: { type: string }) {
     KK: 'bg-pink-100 text-pink-700 border-pink-200',
     CASH: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     VOUCHER: 'bg-amber-100 text-amber-700 border-amber-200',
+    TRANSFER: 'bg-cyan-100 text-cyan-700 border-cyan-200',
   }
   return (
-    <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border w-[46px] text-center inline-block', colors[type] ?? 'bg-slate-100 text-slate-600 border-slate-200')}>
+    <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border w-[56px] text-center inline-block', colors[type] ?? 'bg-slate-100 text-slate-600 border-slate-200')}>
       {type}
     </span>
   )

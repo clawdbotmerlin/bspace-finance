@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs'
 
-const VALID_PAYMENT_TYPES = new Set(['QR', 'DEBIT', 'KK', 'CASH', 'VOUCHER'])
+const VALID_PAYMENT_TYPES = new Set(['QR', 'DEBIT', 'KK', 'CASH', 'VOUCHER', 'TRANSFER'])
 
 export interface ParsedCashierEntry {
   terminalCode: string | null
