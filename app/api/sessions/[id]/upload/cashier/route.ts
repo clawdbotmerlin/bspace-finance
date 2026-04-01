@@ -34,7 +34,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     },
   })
 
-  type PaymentType = 'QR' | 'DEBIT' | 'KK' | 'CASH' | 'VOUCHER'
+  type PaymentType = 'QR' | 'DEBIT' | 'KK' | 'CASH' | 'VOUCHER' | 'TRANSFER'
 
   if (result.entries.length > 0) {
     await prisma.cashierEntry.createMany({

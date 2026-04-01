@@ -28,6 +28,7 @@ enum PaymentType {
   KK
   CASH
   VOUCHER
+  TRANSFER
 }
 
 enum MatchStatus {
