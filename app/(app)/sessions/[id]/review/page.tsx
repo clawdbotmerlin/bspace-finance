@@ -732,7 +732,7 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
                 return (
                   <tbody key={bank}>
                     {/* Bank section header row */}
-                    <tr className={cn('border-t border-slate-200', bankSectionBg(bank))}>
+                    <tr className={cn('border-t-2 border-b-2 border-slate-300', bankSectionBg(bank))}>
                       <td colSpan={totalCols} className="px-4 py-2">
                         <div className="flex items-center justify-between">
                           <span className={cn('font-bold text-sm', bankTextColor(bank))}>{bank} <span className="font-normal text-slate-400">{bankAll.length} entri</span></span>
