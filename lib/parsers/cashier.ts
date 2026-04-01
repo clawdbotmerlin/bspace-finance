@@ -162,6 +162,17 @@ export async function parseCashierFile(
     // Skip rows before any block header
     if (!currentBlock) return
 
+    // ── While past SUBTOTAL: scan for REKAP QUINOS, skip all other data parsing
+    // (Must come before the !colMap guard since colMap is null in this state)
+    if (pastSubtotal) {
+      if (kasirColMap.size > 0 && rowText.includes('QUINOS')) {
+        const amounts = buildPerKasirAmounts(cells, kasirColMap)
+        if (currentBlock === 'REG') rekapQuinos.REG = amounts
+        else if (currentBlock === 'EV') rekapQuinos.EV = amounts
+      }
+      return
+    }
+
     // ── Column header row detection ──────────────────────────────────────────
     if (!colMap) {
       const detected = detectColMap(cells)
@@ -175,16 +186,6 @@ export async function parseCashierFile(
     if (rowText.includes('SUBTOTAL') || rowText.includes('RINGKASAN')) {
       colMap = null
       pastSubtotal = true
-      return
-    }
-
-    // ── While past SUBTOTAL: only extract REKAP QUINOS row, skip everything else
-    if (pastSubtotal) {
-      if (kasirColMap.size > 0 && rowText.includes('QUINOS')) {
-        const amounts = buildPerKasirAmounts(cells, kasirColMap)
-        if (currentBlock === 'REG') rekapQuinos.REG = amounts
-        else if (currentBlock === 'EV') rekapQuinos.EV = amounts
-      }
       return
     }
 
