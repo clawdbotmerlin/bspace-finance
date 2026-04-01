@@ -705,16 +705,16 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
                 <col style={{ width: '176px' }} />
               </colgroup>
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Kode</th>
-                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Bank / Terminal</th>
-                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Jenis</th>
-                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Entitas</th>
+                <tr className="bg-slate-100 border-b-2 border-slate-300">
+                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-r border-slate-300">Kode</th>
+                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-r border-slate-300">Bank / Terminal</th>
+                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-r border-slate-300">Jenis</th>
+                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-r border-slate-300">Entitas</th>
                   {kasirNames.map(k => (
-                    <th key={k} className="px-2 py-1.5 text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{k}</th>
+                    <th key={k} className="px-2 py-1.5 text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-r border-slate-300">{k}</th>
                   ))}
-                  <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-600 uppercase tracking-wide bg-slate-200">Total</th>
-                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Status Bank</th>
+                  <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-600 uppercase tracking-wide bg-slate-300">Total</th>
+                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-l border-slate-300">Status Bank</th>
                 </tr>
               </thead>
 
