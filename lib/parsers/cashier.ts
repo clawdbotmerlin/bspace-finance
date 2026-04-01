@@ -168,6 +168,15 @@ export async function parseCashierFile(
       return
     }
 
+    // ── SUBTOTAL / RINGKASAN boundary — stop parsing data for this block ─────
+    // The RINGKASAN section that follows SUBTOTAL has summary rows (e.g. a
+    // "VOUCHER" row with col C = "VOUCHER") that would otherwise be parsed as
+    // duplicate data entries and inflate per-kasir totals.
+    if (rowText.includes('SUBTOTAL') || rowText.includes('RINGKASAN')) {
+      colMap = null   // discard colMap so remaining rows are skipped as headers
+      return
+    }
+
     // ── KASIR BERTUGAS row (v3 template) — extract per-col kasir names ──────
     // This row appears after the column header; col A contains "KASIR BERTUGAS"
     if (rowText.includes('KASIR BERTUGAS')) {
