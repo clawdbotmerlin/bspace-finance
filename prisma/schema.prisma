@@ -146,6 +146,7 @@ model ReconciliationSession {
   signedOffAt    DateTime?
   signOffComment String?
   kasirNames     Json?                        // string[] of kasir names from KASIR BERTUGAS row
+  rekapQuinos    Json?                        // { REG?: Record<string,number>, EV?: Record<string,number> }
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 

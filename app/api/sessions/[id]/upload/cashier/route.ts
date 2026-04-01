@@ -25,13 +25,14 @@ export const POST = withAuth(async (req: NextRequest) => {
   // Re-upload replaces all existing entries for this session
   await prisma.cashierEntry.deleteMany({ where: { sessionId } })
 
-  // Update session with kasirNames if available
-  if (result.kasirNames && result.kasirNames.length > 0) {
-    await prisma.reconciliationSession.update({
-      where: { id: sessionId },
-      data: { kasirNames: result.kasirNames },
-    })
-  }
+  // Update session with kasirNames and rekapQuinos if available
+  await prisma.reconciliationSession.update({
+    where: { id: sessionId },
+    data: {
+      ...(result.kasirNames && result.kasirNames.length > 0 ? { kasirNames: result.kasirNames } : {}),
+      ...(Object.keys(result.rekapQuinos).length > 0 ? { rekapQuinos: result.rekapQuinos } : {}),
+    },
+  })
 
   type PaymentType = 'QR' | 'DEBIT' | 'KK' | 'CASH' | 'VOUCHER'
 

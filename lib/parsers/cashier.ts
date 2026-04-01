@@ -22,6 +22,7 @@ export interface CashierParseResult {
   errors: string[]
   sheetFound: boolean
   kasirNames: string[]   // unique kasir names across all blocks
+  rekapQuinos: { REG?: Record<string, number>; EV?: Record<string, number> }
 }
 
 function cellStr(value: ExcelJS.CellValue): string {
@@ -112,13 +113,14 @@ export async function parseCashierFile(
   const dayKey = String(sessionDate.getUTCDate()).padStart(2, '0')
   const sheet = workbook.getWorksheet(dayKey)
   if (!sheet) {
-    return { entries: [], skipped: 0, errors: [`Sheet "${dayKey}" tidak ditemukan dalam file.`], sheetFound: false, kasirNames: [] }
+    return { entries: [], skipped: 0, errors: [`Sheet "${dayKey}" tidak ditemukan dalam file.`], sheetFound: false, kasirNames: [], rekapQuinos: {} }
   }
 
   const entries: ParsedCashierEntry[] = []
   const errors: string[] = []
   let skipped = 0
   const allKasirNames: string[] = []
+  const rekapQuinos: { REG?: Record<string, number>; EV?: Record<string, number> } = {}
 
   // State machine
   let currentBlock: 'REG' | 'EV' | null = null
@@ -128,6 +130,7 @@ export async function parseCashierFile(
   let lastBankName = ''
   let lastTerminalId: string | null = null
   let lastTerminalCode = ''  // track col A of last valid EDC row
+  let pastSubtotal = false   // true once SUBTOTAL/RINGKASAN row is seen
 
   sheet.eachRow((row, rowNum) => {
     const rowValues = row.values as ExcelJS.CellValue[]
@@ -141,10 +144,10 @@ export async function parseCashierFile(
     const isEvTitle  = rowText.includes('BLOK EV')  || /\(\s*EV\s*\)/.test(rowText)
 
     if (isRegTitle && !isEvTitle) {
-      currentBlock = 'REG'; colMap = null; kasirColMap = new Map(); lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''; return
+      currentBlock = 'REG'; colMap = null; kasirColMap = new Map(); lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''; pastSubtotal = false; return
     }
     if (isEvTitle) {
-      currentBlock = 'EV'; colMap = null; kasirColMap = new Map(); lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''; return
+      currentBlock = 'EV'; colMap = null; kasirColMap = new Map(); lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''; pastSubtotal = false; return
     }
 
     // Priority 2: date-only header (v3 template — "01 MARET 2026")
@@ -152,7 +155,7 @@ export async function parseCashierFile(
     if (IDN_DATE_RE.test(rowText) && !isRegTitle && !isEvTitle) {
       dateHeaderCount++
       currentBlock = dateHeaderCount === 1 ? 'REG' : 'EV'
-      colMap = null; kasirColMap = new Map(); lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''
+      colMap = null; kasirColMap = new Map(); lastBankName = ''; lastTerminalId = null; lastTerminalCode = ''; pastSubtotal = false
       return
     }
 
@@ -168,12 +171,20 @@ export async function parseCashierFile(
       return
     }
 
-    // ── SUBTOTAL / RINGKASAN boundary — stop parsing data for this block ─────
-    // The RINGKASAN section that follows SUBTOTAL has summary rows (e.g. a
-    // "VOUCHER" row with col C = "VOUCHER") that would otherwise be parsed as
-    // duplicate data entries and inflate per-kasir totals.
+    // ── SUBTOTAL / RINGKASAN boundary — stop data parsing, scan for REKAP QUINOS
     if (rowText.includes('SUBTOTAL') || rowText.includes('RINGKASAN')) {
-      colMap = null   // discard colMap so remaining rows are skipped as headers
+      colMap = null
+      pastSubtotal = true
+      return
+    }
+
+    // ── While past SUBTOTAL: only extract REKAP QUINOS row, skip everything else
+    if (pastSubtotal) {
+      if (kasirColMap.size > 0 && rowText.includes('QUINOS')) {
+        const amounts = buildPerKasirAmounts(cells, kasirColMap)
+        if (currentBlock === 'REG') rekapQuinos.REG = amounts
+        else if (currentBlock === 'EV') rekapQuinos.EV = amounts
+      }
       return
     }
 
@@ -334,5 +345,5 @@ export async function parseCashierFile(
     })
   })
 
-  return { entries, skipped, errors, sheetFound: true, kasirNames: Array.from(new Set(allKasirNames)) }
+  return { entries, skipped, errors, sheetFound: true, kasirNames: Array.from(new Set(allKasirNames)), rekapQuinos }
 }

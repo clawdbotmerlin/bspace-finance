@@ -47,6 +47,7 @@ function Tooltip({ children, content, wide }: { children: React.ReactNode; conte
 interface SessionDetail {
   id: string; outletId: string; sessionDate: string; status: string
   outlet: { name: string; code: string }
+  rekapQuinos?: { REG?: Record<string, number>; EV?: Record<string, number> }
 }
 interface BankMutationLinked {
   id: string; bankName: string; accountNumber: string | null
@@ -523,6 +524,7 @@ export default function ReviewPage() {
                     block={block}
                     kasirNames={kasirNames}
                     allEntries={entries.filter(e => e.blockType === block)}
+                    rekapQuinos={session?.rekapQuinos?.[block]}
                   />
                 </div>
               </div>
@@ -959,8 +961,9 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, onIg
 
 // ─── Ringkasan Kasir Section ──────────────────────────────────────────────────
 
-function RingkasanSection({ block, kasirNames, allEntries }: {
+function RingkasanSection({ block, kasirNames, allEntries, rekapQuinos }: {
   block: 'REG' | 'EV'; kasirNames: string[]; allEntries: CashierEntryFull[]
+  rekapQuinos?: Record<string, number>
 }) {
   if (kasirNames.length === 0) return null
 
@@ -1034,7 +1037,7 @@ function RingkasanSection({ block, kasirNames, allEntries }: {
           </thead>
           <tbody>
             <RingRow label="TOTAL SALES (EDC + CASH)" getVal={k => totals[k]?.totalSales ?? 0} highlight="green" bold />
-            <RingRow label="TOTAL DI REKAP QUINOS ← input dari sistem POS" getVal={() => null} yellow />
+            <RingRow label="TOTAL DI REKAP QUINOS ← input dari sistem POS" getVal={k => rekapQuinos?.[k] ?? null} yellow />
             <RingRow label="TOTAL DI SETTLEMENT BANK ← jumlah transaksi (bukan Rp)" getVal={() => null} yellow />
             {banks.map(bank => (
               <RingRow key={bank} label={bank} getVal={k => totals[k]?.[bank] ?? 0} indent />
@@ -1043,7 +1046,9 @@ function RingkasanSection({ block, kasirNames, allEntries }: {
             <RingRow label="TOTAL PAYMENT (bank + cash)" getVal={k => totals[k]?.totalPayment ?? 0} bold />
             <RingRow
               label="SELISIH (harus = 0, jika tidak nol → ada perbedaan)"
-              getVal={k => (totals[k]?.totalSales ?? 0) - (totals[k]?.totalPayment ?? 0)}
+              getVal={k => rekapQuinos?.[k] != null
+                ? (rekapQuinos[k]! - (totals[k]?.totalSales ?? 0))
+                : ((totals[k]?.totalSales ?? 0) - (totals[k]?.totalPayment ?? 0))}
               highlight="red"
               bold
             />
