@@ -775,7 +775,7 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
                     </td>
                   </tr>
                   {cashEntries.map(entry => (
-                    <tr key={entry.id} className={cn('border-b border-slate-50 last:border-0', entry.paymentType === 'CASH' ? 'bg-emerald-50/50' : 'bg-amber-50/50')}>
+                    <tr key={entry.id} className={cn('border-b border-slate-200 last:border-0', entry.paymentType === 'CASH' ? 'bg-emerald-50/50' : 'bg-amber-50/50')}>
                       <td className="px-3 py-2 text-slate-500 text-[11px] font-mono">—</td>
                       <td className="px-3 py-2">
                         {entry.paymentType === 'VOUCHER' ? (
@@ -855,7 +855,7 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, onIg
   const rowBg = isUnmatched && !discResolved ? 'bg-red-50/60' : isMismatch && !discResolved ? 'bg-amber-50/60' : isZero ? 'bg-slate-50/80' : ''
 
   return (
-    <tr className={cn('border-b border-slate-100 hover:brightness-[0.97] hover:bg-slate-100/60 transition-colors cursor-default', isLast && 'border-0', rowBg)}>
+    <tr className={cn('border-b border-slate-200 hover:brightness-[0.97] hover:bg-slate-100/60 transition-colors cursor-default', isLast && 'border-0', rowBg)}>
       {/* Kode */}
       <td className="px-3 py-2 w-16">
         <span className="text-[11px] font-mono text-slate-500">{entry.terminalCode ?? '—'}</span>
@@ -996,15 +996,15 @@ function RingkasanSection({ block, kasirNames, allEntries }: {
   }) => {
     const rowBg = yellow ? 'bg-yellow-50' : highlight === 'green' ? 'bg-emerald-50' : highlight === 'red' ? 'bg-red-50' : ''
     return (
-      <tr className={cn('border-b border-slate-100 last:border-0', rowBg)}>
-        <td className={cn('px-4 py-1.5 text-[11px] w-56 border-r border-slate-100', indent ? 'pl-8 text-slate-500' : bold ? 'font-semibold text-slate-700' : 'text-slate-600', yellow && 'text-amber-700')}>
+      <tr className={cn('border-b border-slate-200 last:border-0', rowBg)}>
+        <td className={cn('px-4 py-1.5 text-[11px] w-56 border-r border-slate-200', indent ? 'pl-8 text-slate-500' : bold ? 'font-semibold text-slate-700' : 'text-slate-600', yellow && 'text-amber-700')}>
           {label}
         </td>
         {kasirNames.map(k => {
           const val = getVal(k)
           const isNeg = val !== null && val < 0
           return (
-            <td key={k} className={cn('px-4 py-1.5 text-right text-[12px] font-mono tabular-nums border-r border-slate-100',
+            <td key={k} className={cn('px-4 py-1.5 text-right text-[12px] font-mono tabular-nums border-r border-slate-200',
               bold ? 'font-bold' : '',
               yellow ? 'text-amber-700 bg-yellow-50' : highlight === 'green' ? 'text-emerald-700' : isNeg ? 'text-red-600 font-bold' : 'text-slate-700',
             )}>
