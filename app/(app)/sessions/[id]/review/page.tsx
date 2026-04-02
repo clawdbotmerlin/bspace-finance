@@ -1018,9 +1018,9 @@ function RingkasanSection({ block, kasirNames, allEntries, rekapQuinos }: {
     billCount[k] = count
   }
 
-  const RingRow = ({ label, getVal, highlight, bold, indent, yellow }: {
+  const RingRow = ({ label, getVal, highlight, bold, indent, yellow, plain }: {
     label: string; getVal: (k: string) => number | null
-    highlight?: 'green' | 'red' | 'yellow'; bold?: boolean; indent?: boolean; yellow?: boolean
+    highlight?: 'green' | 'red' | 'yellow'; bold?: boolean; indent?: boolean; yellow?: boolean; plain?: boolean
   }) => {
     const rowBg = yellow ? 'bg-yellow-50' : highlight === 'green' ? 'bg-emerald-50' : highlight === 'red' ? 'bg-red-50' : ''
     return (
@@ -1036,7 +1036,7 @@ function RingkasanSection({ block, kasirNames, allEntries, rekapQuinos }: {
               bold ? 'font-bold' : '',
               yellow ? 'text-amber-700 bg-yellow-50' : highlight === 'green' ? 'text-emerald-700' : isNeg ? 'text-red-600 font-bold' : 'text-slate-700',
             )}>
-              {val === null ? <span className="text-slate-300 font-normal">—</span> : val === 0 && yellow ? <span className="text-slate-300 font-normal">—</span> : formatRupiah(val)}
+              {val === null ? <span className="text-slate-300 font-normal">—</span> : val === 0 && yellow ? <span className="text-slate-300 font-normal">—</span> : plain ? val.toLocaleString('id-ID') : formatRupiah(val)}
             </td>
           )
         })}
@@ -1067,7 +1067,7 @@ function RingkasanSection({ block, kasirNames, allEntries, rekapQuinos }: {
           <tbody>
             <RingRow label="TOTAL SALES (EDC + CASH)" getVal={k => totals[k]?.totalSales ?? 0} highlight="green" bold />
             <RingRow label="TOTAL DI REKAP QUINOS ← input dari sistem POS" getVal={k => rekapQuinos?.[k] ?? null} yellow />
-            <RingRow label="TOTAL DI SETTLEMENT BANK ← jumlah transaksi (bukan Rp)" getVal={k => settlementCount[k] ?? 0} highlight="green" bold={false} />
+            <RingRow label="TOTAL DI SETTLEMENT BANK ← jumlah transaksi (bukan Rp)" getVal={k => settlementCount[k] ?? 0} highlight="green" plain />
             {banks.map(bank => (
               <RingRow key={bank} label={bank} getVal={k => totals[k]?.[bank] ?? 0} indent />
             ))}
@@ -1081,7 +1081,7 @@ function RingkasanSection({ block, kasirNames, allEntries, rekapQuinos }: {
               highlight="red"
               bold
             />
-            <RingRow label="TOTAL BILL ← jumlah struk per kasir (angka bulat)" getVal={k => billCount[k] ?? 0} highlight="green" bold={false} />
+            <RingRow label="TOTAL BILL ← jumlah struk per kasir (angka bulat)" getVal={k => billCount[k] ?? 0} highlight="green" plain />
           </tbody>
         </table>
       </div>
