@@ -993,6 +993,31 @@ function RingkasanSection({ block, kasirNames, allEntries, rekapQuinos }: {
     totals[k].totalPayment = totals[k].totalSales
   }
 
+  // TOTAL DI SETTLEMENT BANK: unique terminal codes (EDC only) with amount > 0 per kasir
+  const settlementCount: Record<string, number> = {}
+  for (const k of kasirNames) {
+    const terminals = new Set<string>()
+    for (const entry of allEntries) {
+      if (entry.paymentType === 'CASH' || entry.paymentType === 'VOUCHER') continue
+      const amt = entry.perKasirAmounts?.[k] ?? 0
+      if (amt > 0 && entry.terminalCode) terminals.add(entry.terminalCode)
+    }
+    settlementCount[k] = terminals.size
+  }
+
+  // TOTAL BILL: count of individual nota bill numbers per kasir
+  const billCount: Record<string, number> = {}
+  for (const k of kasirNames) {
+    let count = 0
+    for (const entry of allEntries) {
+      const amt = entry.perKasirAmounts?.[k] ?? 0
+      if (amt > 0 && entry.notaBill) {
+        count += entry.notaBill.split(',').filter(s => s.trim()).length
+      }
+    }
+    billCount[k] = count
+  }
+
   const RingRow = ({ label, getVal, highlight, bold, indent, yellow }: {
     label: string; getVal: (k: string) => number | null
     highlight?: 'green' | 'red' | 'yellow'; bold?: boolean; indent?: boolean; yellow?: boolean
@@ -1042,7 +1067,7 @@ function RingkasanSection({ block, kasirNames, allEntries, rekapQuinos }: {
           <tbody>
             <RingRow label="TOTAL SALES (EDC + CASH)" getVal={k => totals[k]?.totalSales ?? 0} highlight="green" bold />
             <RingRow label="TOTAL DI REKAP QUINOS ← input dari sistem POS" getVal={k => rekapQuinos?.[k] ?? null} yellow />
-            <RingRow label="TOTAL DI SETTLEMENT BANK ← jumlah transaksi (bukan Rp)" getVal={() => null} yellow />
+            <RingRow label="TOTAL DI SETTLEMENT BANK ← jumlah transaksi (bukan Rp)" getVal={k => settlementCount[k] ?? 0} highlight="green" bold={false} />
             {banks.map(bank => (
               <RingRow key={bank} label={bank} getVal={k => totals[k]?.[bank] ?? 0} indent />
             ))}
@@ -1056,7 +1081,7 @@ function RingkasanSection({ block, kasirNames, allEntries, rekapQuinos }: {
               highlight="red"
               bold
             />
-            <RingRow label="TOTAL BILL ← jumlah struk per kasir (angka bulat)" getVal={() => null} yellow />
+            <RingRow label="TOTAL BILL ← jumlah struk per kasir (angka bulat)" getVal={k => billCount[k] ?? 0} highlight="green" bold={false} />
           </tbody>
         </table>
       </div>
