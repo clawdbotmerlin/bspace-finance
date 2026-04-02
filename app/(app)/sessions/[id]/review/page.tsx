@@ -1000,7 +1000,7 @@ function RingkasanSection({ block, kasirNames, allEntries, rekapQuinos }: {
     const rowBg = yellow ? 'bg-yellow-50' : highlight === 'green' ? 'bg-emerald-50' : highlight === 'red' ? 'bg-red-50' : ''
     return (
       <tr className={cn('border-b border-slate-200 last:border-0', rowBg)}>
-        <td className={cn('px-4 py-1.5 text-[11px] w-56 border-r border-slate-200', indent ? 'pl-8 text-slate-500' : bold ? 'font-semibold text-slate-700' : 'text-slate-600', yellow && 'text-amber-700')}>
+        <td className={cn('px-4 py-1.5 text-[11px] border-r border-slate-200 leading-snug', indent ? 'pl-8 text-slate-500' : bold ? 'font-semibold text-slate-700' : 'text-slate-600', yellow && 'text-amber-700')}>
           {label}
         </td>
         {kasirNames.map(k => {
@@ -1026,10 +1026,14 @@ function RingkasanSection({ block, kasirNames, allEntries, rekapQuinos }: {
         <span className="text-slate-400 text-[10px]">Baris kuning = input manual (tidak tersedia) · Baris hijau = formula otomatis</span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse" style={{ minWidth: `${224 + kasirNames.length * 120}px` }}>
+        <table className="w-full border-collapse table-fixed" style={{ minWidth: `${220 + kasirNames.length * 130}px` }}>
+          <colgroup>
+            <col style={{ width: '220px' }} />
+            {kasirNames.map(k => <col key={k} style={{ width: '130px' }} />)}
+          </colgroup>
           <thead>
             <tr className="bg-slate-100 border-b border-slate-200">
-              <th className="px-4 py-2 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-56 border-r border-slate-200" />
+              <th className="px-4 py-2 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide border-r border-slate-200" />
               {kasirNames.map(k => (
                 <th key={k} className="px-4 py-2 text-center text-[11px] font-bold text-slate-700 border-r border-slate-200">{k}</th>
               ))}
