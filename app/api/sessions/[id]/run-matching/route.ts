@@ -49,6 +49,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       accountNumber: m.accountNumber,
       grossAmount: Number(m.grossAmount),
       direction: m.direction,
+      description: m.description ?? null,
     })),
     edcTerminals.map((t: typeof edcTerminals[number]) => ({
       bankLabel: t.bankLabel,
@@ -57,12 +58,15 @@ export const POST = withAuth(async (req: NextRequest) => {
     })),
   )
 
-  const matchesWithDiff = result.matches.filter((m: typeof result.matches[number]) => Math.round(Math.abs(m.amountDiff)) > 0)
+  // 1:1 matches that have an amount difference → flag as discrepancy
+  const matchesWithDiff = result.matches.filter(
+    (m: typeof result.matches[number]) => Math.round(Math.abs(m.amountDiff)) > 0,
+  )
 
   // Apply results atomically
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await prisma.$transaction(async (tx: any) => {
-    // Matched pairs
+    // ── Phase 1: 1:1 matched pairs ──────────────────────────────────────────
     for (const m of result.matches) {
       await tx.cashierEntry.update({
         where: { id: m.cashierEntryId },
@@ -74,7 +78,24 @@ export const POST = withAuth(async (req: NextRequest) => {
       })
     }
 
-    // Zero entries
+    // ── Phase 2 & 3: N:1 group matches (MDR silently accepted — no discrepancy) ─
+    for (const gm of result.groupMatches) {
+      // All entries in the group point to the same mutation
+      for (const entryId of gm.cashierEntryIds) {
+        await tx.cashierEntry.update({
+          where: { id: entryId },
+          data: { matchStatus: 'matched', matchedMutationId: gm.bankMutationId },
+        })
+      }
+      // Mutation points to the first entry (N:1 — one representative FK)
+      await tx.bankMutation.update({
+        where: { id: gm.bankMutationId },
+        data: { matchStatus: 'matched', matchedEntryId: gm.cashierEntryIds[0] },
+      })
+      // No discrepancy created — group MDR differences are silently accepted
+    }
+
+    // ── Zero entries ─────────────────────────────────────────────────────────
     if (result.zeros.length > 0) {
       await tx.cashierEntry.updateMany({
         where: { id: { in: result.zeros } },
@@ -82,7 +103,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       })
     }
 
-    // Discrepancies — amount mismatches
+    // ── Discrepancies — amount mismatches (1:1 only) ──────────────────────────
     if (matchesWithDiff.length > 0) {
       await tx.discrepancy.createMany({
         data: matchesWithDiff.map((m: typeof matchesWithDiff[number]) => ({
@@ -96,7 +117,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       })
     }
 
-    // Discrepancies — missing in bank
+    // ── Discrepancies — missing in bank ───────────────────────────────────────
     if (result.missingInBank.length > 0) {
       await tx.discrepancy.createMany({
         data: result.missingInBank.map((id) => ({
@@ -109,7 +130,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       })
     }
 
-    // Discrepancies — unexpected bank entries
+    // ── Discrepancies — unexpected bank entries ───────────────────────────────
     if (result.unexpectedBank.length > 0) {
       await tx.discrepancy.createMany({
         data: result.unexpectedBank.map((id) => ({
@@ -122,17 +143,23 @@ export const POST = withAuth(async (req: NextRequest) => {
       })
     }
 
-    // Advance session status
+    // ── Advance session status ────────────────────────────────────────────────
     await tx.reconciliationSession.update({
       where: { id: sessionId },
       data: { status: 'reviewing' },
     })
   })
 
-  const totalDiscrepancies = matchesWithDiff.length + result.missingInBank.length + result.unexpectedBank.length
+  const totalMatched1to1  = result.matches.length
+  const totalGroupMatches = result.groupMatches.length
+  const totalGroupEntries = result.groupMatches.reduce((s, g) => s + g.cashierEntryIds.length, 0)
+  const totalDiscrepancies =
+    matchesWithDiff.length + result.missingInBank.length + result.unexpectedBank.length
 
   return NextResponse.json({
-    matched: result.matches.length,
+    matched: totalMatched1to1,
+    groupMatched: totalGroupMatches,
+    groupMatchedEntries: totalGroupEntries,
     zeros: result.zeros.length,
     missingInBank: result.missingInBank.length,
     unexpectedBank: result.unexpectedBank.length,
