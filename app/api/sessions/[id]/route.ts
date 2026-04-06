@@ -29,16 +29,12 @@ export const DELETE = withAuth(async (req: NextRequest, authedSession) => {
     return NextResponse.json({ error: 'Sesi tidak ditemukan.' }, { status: 404 })
   }
 
-  // Signed-off sessions are permanent financial records — never allow deletion
-  if (session.status === 'signed_off') {
-    return NextResponse.json({ error: 'Sesi yang sudah ditandatangani tidak dapat dihapus.' }, { status: 400 })
-  }
-
   // Finance staff can only delete early-stage sessions (uploading / reviewing)
   const role = (authedSession.user as { role?: string }).role
   if (role === 'finance' && !['uploading', 'reviewing'].includes(session.status)) {
     return NextResponse.json({ error: 'Anda tidak memiliki izin untuk menghapus sesi dengan status ini.' }, { status: 403 })
   }
+  // Admins can delete sessions at any status (including signed_off)
 
   // Delete the session — CashierEntry, BankMutation, Discrepancy cascade automatically.
   // AuditLog.sessionId is nullable; Prisma sets it to null on delete.
