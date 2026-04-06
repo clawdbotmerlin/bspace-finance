@@ -368,15 +368,13 @@ export default function ReviewPage() {
             <Button size="sm" onClick={handleSubmit} disabled={submitting || isReadOnly} className="gap-1.5">
               {submitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Mengirim...</> : <><Send className="w-3.5 h-3.5" />Submit TTD</>}
             </Button>
-            {session.status !== 'signed_off' && (
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-md border border-slate-200 hover:border-red-200 transition-colors"
-                title="Hapus sesi"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-md border border-slate-200 hover:border-red-200 transition-colors"
+              title="Hapus sesi"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </div>
