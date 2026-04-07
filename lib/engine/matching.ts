@@ -139,11 +139,11 @@ function findHomogeneousSubsetWithSum(
     byType.get(t)!.push(e)
   }
 
-  for (const [, group] of byType) {
-    const result = findSubsetWithSum(group, target, tolerance)
-    if (result) return result
-  }
-  return null
+  let match: EngineEntry[] | null = null
+  byType.forEach((group) => {
+    if (!match) match = findSubsetWithSum(group, target, tolerance)
+  })
+  return match
 }
 
 // ── Main engine ──────────────────────────────────────────────────────────────
