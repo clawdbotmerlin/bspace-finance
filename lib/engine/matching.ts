@@ -1,12 +1,13 @@
 // Pure in-memory matching engine — no database calls.
 // Takes plain data arrays, returns a MatchResult that the caller persists.
 //
-// Three-phase matching strategy:
-//   Phase 1 — 1:1 exact/tolerance matching (single cashier entry ↔ single mutation)
-//   Phase 2 — N:1 group matching via HO TGH gross total parsed from mutation description
-//   Phase 3 — N:1 subset-sum fallback using mutation.grossAmount as target
+// Three-phase matching strategy — ORDER MATTERS:
+//   Phase 1 — N:1 group matching via "HO TGH" gross total in mutation description
+//              Runs FIRST so 1:1 matching cannot steal entries that belong to a batch.
+//   Phase 2 — 1:1 exact/tolerance matching (single cashier entry ↔ single mutation)
+//   Phase 3 — N:1 subset-sum fallback; same-payment-type only to prevent false groups
 //
-// Group matches (Phase 2/3) are silently accepted — MDR is never flagged as a discrepancy.
+// Group matches (Phase 1/3) are silently accepted — MDR is never flagged as a discrepancy.
 
 const SKIP_PAYMENT_TYPES = new Set(['CASH', 'VOUCHER'])
 
@@ -62,13 +63,14 @@ function withinTolerance(a: number, b: number, tolerance: number): boolean {
 
 /**
  * Parse the pre-MDR gross total from a bank mutation description.
- * Handles formats: "HO TGH: 3.173.700", "HO TGH 3173700", "TGH: 3,173,700"
+ * Requires the exact prefix "HO TGH" to avoid false matches on unrelated "TGH" codes.
+ * Handles formats: "HO TGH: 3.173.700", "HO TGH 3173700"
  * Supports Indonesian dot-as-thousands format.
  */
 function parseGrossTotal(description: string | null): number | null {
   if (!description) return null
-  // Match "HO TGH" or just "TGH" followed by optional separator then a number
-  const match = description.match(/(?:HO\s+)?TGH[:\s]+([0-9][0-9.,]*)/i)
+  // Require "HO TGH" exactly — do NOT match bare "TGH" (too broad, hits batch/ref codes)
+  const match = description.match(/HO\s+TGH[:\s]+([0-9][0-9.,]*)/i)
   if (!match) return null
   // Indonesian format: dots = thousands separator, comma = decimal separator
   const raw = match[1].replace(/\./g, '').replace(',', '.')
@@ -78,9 +80,8 @@ function parseGrossTotal(description: string | null): number | null {
 
 /**
  * Find a subset of `entries` whose amounts sum within `tolerance` of `target`.
- * Uses DFS with sorted pruning — efficient for small groups (≤12 items).
- * Returns the matched subset or null if none found.
- * Only returns subsets with ≥ 2 entries (N:1 matching; 1:1 is handled in Phase 1).
+ * Uses DFS with ascending-sort pruning — efficient for small groups (≤12 items).
+ * Only returns subsets with ≥ 2 entries (N:1; 1:1 is Phase 2).
  */
 function findSubsetWithSum(
   entries: EngineEntry[],
@@ -90,7 +91,6 @@ function findSubsetWithSum(
 ): EngineEntry[] | null {
   if (entries.length < 2 || target <= 0) return null
 
-  // Sort ascending so we can prune early when sum exceeds target
   const sorted = [...entries].sort((a, b) => a.amount - b.amount)
   let found: EngineEntry[] | null = null
 
@@ -122,6 +122,30 @@ function findSubsetWithSum(
   return found
 }
 
+/**
+ * Phase 3 variant: only matches entries of the same paymentType together.
+ * Prevents unrelated payment types from accidentally summing to a target.
+ */
+function findHomogeneousSubsetWithSum(
+  entries: EngineEntry[],
+  target: number,
+  tolerance: number,
+): EngineEntry[] | null {
+  // Group by paymentType and try each type independently
+  const byType = new Map<string, EngineEntry[]>()
+  for (const e of entries) {
+    const t = e.paymentType.toUpperCase()
+    if (!byType.has(t)) byType.set(t, [])
+    byType.get(t)!.push(e)
+  }
+
+  for (const [, group] of byType) {
+    const result = findSubsetWithSum(group, target, tolerance)
+    if (result) return result
+  }
+  return null
+}
+
 // ── Main engine ──────────────────────────────────────────────────────────────
 
 export function runMatchingEngine(
@@ -129,7 +153,8 @@ export function runMatchingEngine(
   mutations: EngineMutation[],
   terminals: EngineTerminal[],
 ): MatchResult {
-  const TOLERANCE = 0.05 // 5% — covers MDR + rounding
+  const TOLERANCE_GROUP   = 0.02 // 2% for group matches — HO TGH is pre-MDR gross, small rounding only
+  const TOLERANCE_ONE2ONE = 0.01 // 1% for 1:1 — EDC MDR is under 1%
 
   // Build bankLabel → accountNumber lookup (normalised to uppercase)
   const accountMap = new Map<string, string | null>()
@@ -158,66 +183,19 @@ export function runMatchingEngine(
   // Only credit mutations participate
   const crMutations = mutations.filter((m) => m.direction === 'CR')
 
-  // ── Phase 1: 1:1 matching ─────────────────────────────────────────────────
+  // ── Pre-pass: mark zero / skipped entries ─────────────────────────────────
   for (const entry of entries) {
-    const amount = entry.amount
-
-    // Zero-amount entries
-    if (amount === 0) {
+    if (entry.amount === 0 || SKIP_PAYMENT_TYPES.has(entry.paymentType.toUpperCase())) {
       result.zeros.push(entry.id)
       usedEntries.add(entry.id)
-      continue
     }
-
-    // Cash / Voucher — no bank settlement expected
-    if (SKIP_PAYMENT_TYPES.has(entry.paymentType.toUpperCase())) {
-      result.zeros.push(entry.id)
-      usedEntries.add(entry.id)
-      continue
-    }
-
-    const accountNumber = entryAccountNumber(entry)
-
-    // Candidates: same bank, within tolerance, not yet used
-    let candidates = crMutations.filter(
-      (m) =>
-        m.bankName.toUpperCase() === entry.bankName.toUpperCase() &&
-        !usedMutations.has(m.id) &&
-        withinTolerance(m.grossAmount, amount, TOLERANCE),
-    )
-
-    // Narrow by account number when available
-    if (accountNumber && candidates.length > 0) {
-      const narrowed = candidates.filter((m) => m.accountNumber === accountNumber)
-      if (narrowed.length > 0) candidates = narrowed
-    }
-
-    if (candidates.length === 0) continue // will be handled by Phase 2/3 or missingInBank
-
-    // Prefer bank ≤ cashier (MDR always deducted); among those pick smallest abs diff
-    const underCandidates = candidates.filter((m) => m.grossAmount <= amount)
-    const pool = underCandidates.length > 0 ? underCandidates : candidates
-    const best = pool.reduce((a, b) =>
-      Math.abs(a.grossAmount - amount) <= Math.abs(b.grossAmount - amount) ? a : b,
-    )
-
-    usedMutations.add(best.id)
-    usedEntries.add(entry.id)
-    result.matches.push({
-      cashierEntryId: entry.id,
-      bankMutationId: best.id,
-      amountDiff: best.grossAmount - amount,
-    })
   }
 
   // ── Helper: build groups of still-unmatched EDC entries by bankName ────────
-  // (grouped by bank only; account number is used for further narrowing inside the loop)
   function buildEntryGroups(): Map<string, EngineEntry[]> {
     const groups = new Map<string, EngineEntry[]>()
     for (const entry of entries) {
       if (usedEntries.has(entry.id)) continue
-      if (SKIP_PAYMENT_TYPES.has(entry.paymentType.toUpperCase())) continue
-      if (entry.amount <= 0) continue
       const key = entry.bankName.toUpperCase()
       if (!groups.has(key)) groups.set(key, [])
       groups.get(key)!.push(entry)
@@ -225,7 +203,11 @@ export function runMatchingEngine(
     return groups
   }
 
-  // ── Phase 2: N:1 via HO TGH gross total ──────────────────────────────────
+  // ── Phase 1: N:1 via HO TGH gross total (MUST run before 1:1 matching) ────
+  //
+  // Banks batch multiple POS transactions into one settlement. The gross total
+  // before MDR is embedded in the mutation description as "HO TGH: X".
+  // We resolve these first so Phase 2 cannot steal individual entries from a batch.
   {
     const entryGroups = buildEntryGroups()
 
@@ -247,7 +229,7 @@ export function runMatchingEngine(
           })
         : pool
 
-      const subset = findSubsetWithSum(narrowed.length >= 2 ? narrowed : pool, grossTarget, TOLERANCE)
+      const subset = findSubsetWithSum(narrowed.length >= 2 ? narrowed : pool, grossTarget, TOLERANCE_GROUP)
       if (!subset) continue
 
       const sumAmount = subset.reduce((s, e) => s + e.amount, 0)
@@ -264,7 +246,53 @@ export function runMatchingEngine(
     }
   }
 
-  // ── Phase 3: N:1 subset-sum fallback (mutation.grossAmount as target) ─────
+  // ── Phase 2: 1:1 individual matching ─────────────────────────────────────
+  //
+  // Runs after HO TGH group matching so batched entries are already consumed
+  // and cannot be incorrectly stolen by a loose tolerance match.
+  for (const entry of entries) {
+    if (usedEntries.has(entry.id)) continue
+
+    const amount = entry.amount
+    const accountNumber = entryAccountNumber(entry)
+
+    // Candidates: same bank, within tolerance, not yet used
+    let candidates = crMutations.filter(
+      (m) =>
+        m.bankName.toUpperCase() === entry.bankName.toUpperCase() &&
+        !usedMutations.has(m.id) &&
+        withinTolerance(m.grossAmount, amount, TOLERANCE_ONE2ONE),
+    )
+
+    // Narrow by account number when available
+    if (accountNumber && candidates.length > 0) {
+      const narrowed = candidates.filter((m) => m.accountNumber === accountNumber)
+      if (narrowed.length > 0) candidates = narrowed
+    }
+
+    if (candidates.length === 0) continue
+
+    // Prefer bank ≤ cashier (MDR always deducted); among those pick smallest abs diff
+    const underCandidates = candidates.filter((m) => m.grossAmount <= amount)
+    const pool = underCandidates.length > 0 ? underCandidates : candidates
+    const best = pool.reduce((a, b) =>
+      Math.abs(a.grossAmount - amount) <= Math.abs(b.grossAmount - amount) ? a : b,
+    )
+
+    usedMutations.add(best.id)
+    usedEntries.add(entry.id)
+    result.matches.push({
+      cashierEntryId: entry.id,
+      bankMutationId: best.id,
+      amountDiff: best.grossAmount - amount,
+    })
+  }
+
+  // ── Phase 3: N:1 subset-sum fallback ─────────────────────────────────────
+  //
+  // For mutations whose descriptions don't contain "HO TGH".
+  // Uses same-paymentType grouping to prevent unrelated entries from accidentally
+  // summing to a target (e.g. a QR entry + DEBIT entry wrongly matching a KK mutation).
   {
     const entryGroups = buildEntryGroups()
 
@@ -282,7 +310,8 @@ export function runMatchingEngine(
           })
         : pool
 
-      const subset = findSubsetWithSum(narrowed.length >= 2 ? narrowed : pool, mutation.grossAmount, TOLERANCE)
+      const candidates = narrowed.length >= 2 ? narrowed : pool
+      const subset = findHomogeneousSubsetWithSum(candidates, mutation.grossAmount, TOLERANCE_GROUP)
       if (!subset) continue
 
       const sumAmount = subset.reduce((s, e) => s + e.amount, 0)
@@ -303,8 +332,6 @@ export function runMatchingEngine(
 
   for (const entry of entries) {
     if (usedEntries.has(entry.id)) continue
-    if (SKIP_PAYMENT_TYPES.has(entry.paymentType.toUpperCase())) continue
-    if (entry.amount === 0) continue
     result.missingInBank.push(entry.id)
   }
 
