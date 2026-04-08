@@ -726,7 +726,15 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
                 if (displayEntries.length === 0) return null
 
                 const kasirTotal = bankAll.reduce((s, e) => s + Number(e.amount), 0)
-                const bankCRTotal = bankAll.reduce((s, e) => s + Number(e.bankMutation?.grossAmount ?? 0), 0)
+                // Deduplicate by mutation ID: group matches share one mutation across N entries,
+                // so we must count each mutation's grossAmount only once.
+                const seenMutIds = new Set<string>()
+                const bankCRTotal = bankAll.reduce((s, e) => {
+                  if (!e.bankMutation) return s
+                  if (seenMutIds.has(e.bankMutation.id)) return s
+                  seenMutIds.add(e.bankMutation.id)
+                  return s + Number(e.bankMutation.grossAmount)
+                }, 0)
                 const selisih = bankCRTotal - kasirTotal
 
                 return (
