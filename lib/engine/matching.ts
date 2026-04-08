@@ -125,8 +125,7 @@ export function runMatchingEngine(
   terminals: EngineTerminal[],
 ): MatchResult {
   const TOL_GROUP   = 0.02 // 2% — HO TGH is pre-MDR gross; only minor rounding
-  const TOL_ONE2ONE = 0.05 // 5% — covers KK MDR up to ~3%; Phase 1 already runs first
-                           //       so batch entries are consumed before Phase 2 can steal them
+  const TOL_ONE2ONE = 0.035 // 3.5% — covers typical MDR range (KK ~2–3%, DEBIT ~1%)
 
   // bankLabel (uppercase) → accountNumber
   const accountMap = new Map<string, string | null>()
