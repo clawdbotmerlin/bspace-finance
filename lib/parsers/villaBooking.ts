@@ -64,7 +64,7 @@ function parseAmount(raw: string): number {
 }
 
 export function parseVillaBookingCsv(buffer: ArrayBuffer): VillaBookingParseResult {
-  const wb = XLSX.read(buffer, { type: 'array', raw: false })
+  const wb = XLSX.read(new Uint8Array(buffer), { type: 'array', raw: false })
   const ws = wb.Sheets[wb.SheetNames[0]]
   const rows = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' })
 
