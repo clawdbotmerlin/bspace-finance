@@ -56,25 +56,25 @@ function toYMD(d: Date): string {
   return d.toLocaleDateString('en-CA') // returns YYYY-MM-DD
 }
 
-type Preset = 'today' | 'tomorrow' | 'week' | 'month' | 'year' | ''
+type Preset = 'today' | 'yesterday' | 'last7' | 'month' | 'lastmonth' | ''
 
 function presetRange(p: Preset): { from: string; to: string } {
   const now = new Date()
   const y = now.getFullYear(), m = now.getMonth(), d = now.getDate()
-  if (p === 'today')    { const t = new Date(y, m, d); return { from: toYMD(t), to: toYMD(t) } }
-  if (p === 'tomorrow') { const t = new Date(y, m, d + 1); return { from: toYMD(t), to: toYMD(t) } }
-  if (p === 'week')     { const mon = new Date(y, m, d - ((now.getDay() + 6) % 7)); const sun = new Date(y, m, d - ((now.getDay() + 6) % 7) + 6); return { from: toYMD(mon), to: toYMD(sun) } }
-  if (p === 'month')    { return { from: toYMD(new Date(y, m, 1)), to: toYMD(new Date(y, m + 1, 0)) } }
-  if (p === 'year')     { return { from: toYMD(new Date(y, 0, 1)), to: toYMD(new Date(y, 11, 31)) } }
+  if (p === 'today')     { const t = new Date(y, m, d); return { from: toYMD(t), to: toYMD(t) } }
+  if (p === 'yesterday') { const t = new Date(y, m, d - 1); return { from: toYMD(t), to: toYMD(t) } }
+  if (p === 'last7')     { return { from: toYMD(new Date(y, m, d - 6)), to: toYMD(new Date(y, m, d)) } }
+  if (p === 'month')     { return { from: toYMD(new Date(y, m, 1)), to: toYMD(new Date(y, m + 1, 0)) } }
+  if (p === 'lastmonth') { return { from: toYMD(new Date(y, m - 1, 1)), to: toYMD(new Date(y, m, 0)) } }
   return { from: '', to: '' }
 }
 
 const PRESETS: { key: Preset; label: string }[] = [
-  { key: 'today',    label: 'Hari ini' },
-  { key: 'tomorrow', label: 'Besok' },
-  { key: 'week',     label: 'Minggu ini' },
-  { key: 'month',    label: 'Bulan ini' },
-  { key: 'year',     label: 'Tahun ini' },
+  { key: 'today',     label: 'Hari ini' },
+  { key: 'yesterday', label: 'Kemarin' },
+  { key: 'last7',     label: '7 Hari Terakhir' },
+  { key: 'month',     label: 'Bulan ini' },
+  { key: 'lastmonth', label: 'Bulan lalu' },
 ]
 
 function statusVariant(s: string): 'success' | 'warning' | 'outline' {
@@ -263,6 +263,7 @@ export default function VillaAnalyticsPage() {
   const [activePreset, setActivePreset] = useState<Preset>('')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [exportingSummary, setExportingSummary] = useState(false)
 
   const fetchBookings = useCallback(async () => {
     setLoading(true)
@@ -309,6 +310,31 @@ export default function VillaAnalyticsPage() {
       URL.revokeObjectURL(url)
     } finally {
       setExporting(false)
+    }
+  }
+
+  async function handleSummaryExport() {
+    setExportingSummary(true)
+    try {
+      const params = new URLSearchParams()
+      if (filterFrom) params.set('from', filterFrom)
+      if (filterTo) params.set('to', filterTo)
+      if (filterListing) params.set('listing', filterListing)
+      const res = await fetch(`/api/villa/bookings/summary-report?${params}`)
+      if (!res.ok) {
+        const d = await res.json()
+        alert(d.error ?? 'Export gagal.')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'laporan-mingguan.xlsx'
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExportingSummary(false)
     }
   }
 
@@ -366,11 +392,21 @@ export default function VillaAnalyticsPage() {
             variant="outline"
             size="sm"
             className="gap-1.5"
+            disabled={bookings.length === 0 || exportingSummary}
+            onClick={handleSummaryExport}
+          >
+            {exportingSummary ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            Laporan Mingguan
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
             disabled={bookings.length === 0 || exporting}
             onClick={handleExport}
           >
             {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-            Export Excel
+            Detail per Listing
           </Button>
           <Button
             size="sm"
@@ -459,14 +495,14 @@ export default function VillaAnalyticsPage() {
             </button>
           )}
 
-          {/* Export per listing dropdown — only when data exists */}
+          {/* Per-listing export dropdown */}
           {uniqueListings.length > 0 && (
             <div className="ml-auto">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
                     <Download className="w-3.5 h-3.5" />
-                    Export per Listing
+                    Detail per Listing
                     <ChevronDown className="w-3 h-3 ml-0.5" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -486,14 +522,6 @@ export default function VillaAnalyticsPage() {
                       <span className="truncate">{l}</span>
                     </DropdownMenuItem>
                   ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleExport}
-                    className="gap-2 cursor-pointer text-xs font-medium text-emerald-700"
-                  >
-                    <Download className="w-3 h-3 shrink-0" />
-                    Export semua listing sekaligus
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -534,7 +562,7 @@ export default function VillaAnalyticsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  {['Check-in', 'Check-out', 'Tamu', 'Listing', 'Malam', 'OTA', 'Gross (IDR)', 'Payout (IDR)', 'Status', ''].map((h) => (
+                  {['Check-in', 'Check-out', 'Tamu', 'Listing', 'Malam', 'OTA', 'Gross (IDR)', 'Payout (IDR)', 'Status'].map((h) => (
                     <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
@@ -572,15 +600,6 @@ export default function VillaAnalyticsPage() {
                       <Badge variant={statusVariant(b.status)} className="text-[10px] capitalize">
                         {b.status}
                       </Badge>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <button
-                        onClick={() => handleExportListing(b.listing)}
-                        className="p-1 rounded hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 transition-colors"
-                        title="Export Excel untuk listing ini"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
                     </td>
                   </tr>
                 ))}
