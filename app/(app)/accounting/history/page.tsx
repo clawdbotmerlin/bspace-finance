@@ -57,28 +57,28 @@ function ActionCell({ s, userRole, onDelete }: { s: SessionRow; userRole: string
   return (
     <div className="flex items-center justify-end gap-1.5">
       {s.status === 'uploading' && (
-        <Link href={`/sessions/new?resumeId=${s.id}`}>
+        <Link href={`/accounting/sessions/new?resumeId=${s.id}`}>
           <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
             <ArrowRight className="w-3 h-3" /> Lanjutkan
           </Button>
         </Link>
       )}
       {s.status === 'reviewing' && (
-        <Link href={`/sessions/${s.id}/review`}>
+        <Link href={`/accounting/sessions/${s.id}/review`}>
           <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
             <Eye className="w-3 h-3" /> Review
           </Button>
         </Link>
       )}
       {s.status === 'pending_signoff' && (
-        <Link href={`/sessions/${s.id}/signoff`}>
+        <Link href={`/accounting/sessions/${s.id}/signoff`}>
           <Button size="sm" className="gap-1 text-xs h-7 px-2.5">
             <ClipboardCheck className="w-3 h-3" /> TTD
           </Button>
         </Link>
       )}
       {s.status === 'signed_off' && (
-        <Link href={`/sessions/${s.id}/signoff`}>
+        <Link href={`/accounting/sessions/${s.id}/signoff`}>
           <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2.5">
             <Eye className="w-3 h-3" /> Lihat
           </Button>

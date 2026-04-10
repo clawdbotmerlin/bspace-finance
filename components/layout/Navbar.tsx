@@ -29,13 +29,13 @@ interface NotifCounts {
 
 const NAV_ITEMS = [
   { href: '/accounting', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'finance', 'manager'] },
-  { href: '/sessions/new', label: 'Rekonsiliasi Baru', icon: Plus, roles: ['admin', 'finance'] },
-  { href: '/history', label: 'Riwayat', icon: History, roles: ['admin', 'finance', 'manager'] },
-  { href: '/signoff', label: 'Persetujuan', icon: ClipboardCheck, roles: ['admin', 'manager'] },
-  { href: '/discrepancies', label: 'Diskrepansi', icon: AlertTriangle, roles: ['admin', 'finance'] },
-  { href: '/admin/master-data', label: 'Data Master', icon: Database, roles: ['admin'] },
-  { href: '/admin/audit-log', label: 'Log Audit', icon: ScrollText, roles: ['admin'] },
-  { href: '/admin/users', label: 'Pengguna', icon: Users, roles: ['admin'] },
+  { href: '/accounting/sessions/new', label: 'Rekonsiliasi Baru', icon: Plus, roles: ['admin', 'finance'] },
+  { href: '/accounting/history', label: 'Riwayat', icon: History, roles: ['admin', 'finance', 'manager'] },
+  { href: '/accounting/signoff', label: 'Persetujuan', icon: ClipboardCheck, roles: ['admin', 'manager'] },
+  { href: '/accounting/discrepancies', label: 'Diskrepansi', icon: AlertTriangle, roles: ['admin', 'finance'] },
+  { href: '/accounting/admin/master-data', label: 'Data Master', icon: Database, roles: ['admin'] },
+  { href: '/accounting/admin/audit-log', label: 'Log Audit', icon: ScrollText, roles: ['admin'] },
+  { href: '/accounting/admin/users', label: 'Pengguna', icon: Users, roles: ['admin'] },
 ]
 
 const POLL_MS = 60_000
@@ -155,7 +155,7 @@ export function Navbar({ userName, userRole }: NavbarProps) {
                 <>
                   {notifs.pendingSignoff > 0 && (
                     <DropdownMenuItem asChild>
-                      <Link href="/signoff" className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer">
+                      <Link href="/accounting/signoff" className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer">
                         <div className="mt-0.5 h-6 w-6 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
                           <ClipboardList className="h-3.5 w-3.5 text-blue-400" />
                         </div>
@@ -170,7 +170,7 @@ export function Navbar({ userName, userRole }: NavbarProps) {
                   )}
                   {notifs.openDiscrepancies > 0 && (
                     <DropdownMenuItem asChild>
-                      <Link href="/discrepancies" className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer">
+                      <Link href="/accounting/discrepancies" className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer">
                         <div className="mt-0.5 h-6 w-6 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
                           <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
                         </div>
@@ -259,7 +259,7 @@ export function Navbar({ userName, userRole }: NavbarProps) {
                 </p>
                 {notifs.pendingSignoff > 0 && (
                   <Link
-                    href="/signoff"
+                    href="/accounting/signoff"
                     onClick={() => setMobileOpen(false)}
                     className="flex items-center gap-2 px-2 py-1.5 rounded text-[12px] text-blue-300 hover:bg-white/5"
                   >
@@ -269,7 +269,7 @@ export function Navbar({ userName, userRole }: NavbarProps) {
                 )}
                 {notifs.openDiscrepancies > 0 && (
                   <Link
-                    href="/discrepancies"
+                    href="/accounting/discrepancies"
                     onClick={() => setMobileOpen(false)}
                     className="flex items-center gap-2 px-2 py-1.5 rounded text-[12px] text-red-300 hover:bg-white/5"
                   >

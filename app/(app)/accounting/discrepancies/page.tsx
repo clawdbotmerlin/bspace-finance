@@ -619,7 +619,7 @@ export default function DiscrepanciesPage() {
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-0.5">
                           <Link
-                            href={`/sessions/${d.session.id}/review`}
+                            href={`/accounting/sessions/${d.session.id}/review`}
                             className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"
                           >
                             {d.session.outlet.name}

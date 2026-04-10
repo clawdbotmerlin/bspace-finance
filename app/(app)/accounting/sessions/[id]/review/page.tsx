@@ -284,7 +284,7 @@ export default function ReviewPage() {
         setShowDeleteConfirm(false)
         return
       }
-      router.push('/history')
+      router.push('/accounting/history')
     } finally { setDeleting(false) }
   }
 
@@ -298,7 +298,7 @@ export default function ReviewPage() {
     <div className="p-6 max-w-xl mx-auto">
       <ErrorMsg msg={error} />
       <div className="mt-4 text-center">
-        <Link href="/sessions/new"><Button variant="outline" className="gap-1.5"><ArrowLeft className="w-4 h-4" />Kembali</Button></Link>
+        <Link href="/accounting/sessions/new"><Button variant="outline" className="gap-1.5"><ArrowLeft className="w-4 h-4" />Kembali</Button></Link>
       </div>
     </div>
   )
@@ -309,7 +309,7 @@ export default function ReviewPage() {
         <AlertCircle className="w-10 h-10 text-slate-300 mx-auto mb-3" />
         <p className="text-slate-600 font-medium">Sesi masih dalam tahap upload</p>
         <p className="text-sm text-slate-400 mt-1 mb-4">Upload file kasir dan mutasi bank, lalu jalankan rekonsiliasi.</p>
-        <Link href="/sessions/new"><Button className="gap-1.5"><ArrowLeft className="w-4 h-4" />Kembali ke Upload</Button></Link>
+        <Link href="/accounting/sessions/new"><Button className="gap-1.5"><ArrowLeft className="w-4 h-4" />Kembali ke Upload</Button></Link>
       </div>
     </div>
   )
@@ -346,7 +346,7 @@ export default function ReviewPage() {
       {/* Header */}
       <div className="mb-4">
         <div className="flex items-center gap-2 mb-1">
-          <Link href="/history" className="text-slate-400 hover:text-slate-600"><ArrowLeft className="w-4 h-4" /></Link>
+          <Link href="/accounting/history" className="text-slate-400 hover:text-slate-600"><ArrowLeft className="w-4 h-4" /></Link>
           <h1 className="text-xl font-semibold text-slate-800">Review Rekonsiliasi</h1>
         </div>
         <div className="flex items-center justify-between flex-wrap gap-3">

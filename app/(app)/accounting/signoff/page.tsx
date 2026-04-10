@@ -135,7 +135,7 @@ export default function SignoffQueuePage() {
                       : '—'}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Link href={`/sessions/${s.id}/signoff`}>
+                    <Link href={`/accounting/sessions/${s.id}/signoff`}>
                       <Button size="sm" className="gap-1.5">
                         Tanda Tangani
                         <ArrowRight className="w-3.5 h-3.5" />

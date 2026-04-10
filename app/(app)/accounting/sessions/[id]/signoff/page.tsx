@@ -257,7 +257,7 @@ export default function SignoffPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-8 shadow-sm">
           <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
           <p className="text-slate-600 font-medium">{error}</p>
-          <Link href="/signoff">
+          <Link href="/accounting/signoff">
             <Button variant="outline" className="mt-4 gap-1.5">
               <ArrowLeft className="w-4 h-4" /> Kembali
             </Button>
@@ -279,7 +279,7 @@ export default function SignoffPage() {
           <p className="text-sm text-slate-400 mt-1">
             Sesi ini masih dalam tahap rekonsiliasi dan belum disubmit untuk tanda tangan.
           </p>
-          <Link href="/signoff">
+          <Link href="/accounting/signoff">
             <Button variant="outline" className="mt-4 gap-1.5">
               <ArrowLeft className="w-4 h-4" /> Kembali ke Antrian
             </Button>
@@ -304,7 +304,7 @@ export default function SignoffPage() {
       {/* ── Session Header ── */}
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-2">
-          <Link href="/signoff" className="text-slate-400 hover:text-slate-600 transition-colors">
+          <Link href="/accounting/signoff" className="text-slate-400 hover:text-slate-600 transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <h1 className="text-xl font-semibold text-slate-800">Tanda Tangan Sesi</h1>
@@ -319,7 +319,7 @@ export default function SignoffPage() {
             </Badge>
             {statusBadge(session.status)}
           </div>
-          <Link href={`/sessions/${sessionId}/review`}>
+          <Link href={`/accounting/sessions/${sessionId}/review`}>
             <Button variant="outline" size="sm" className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50">
               <Search className="w-3.5 h-3.5" />
               Lihat Detail Rekonsiliasi
@@ -470,7 +470,7 @@ export default function SignoffPage() {
             </div>
           </div>
           <div className="mt-4 flex items-center gap-2 flex-wrap">
-            <Link href="/signoff">
+            <Link href="/accounting/signoff">
               <Button variant="outline" size="sm" className="gap-1.5">
                 <ArrowLeft className="w-3.5 h-3.5" /> Kembali ke Antrian
               </Button>

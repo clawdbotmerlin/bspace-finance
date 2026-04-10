@@ -39,7 +39,7 @@ function statusBadge(status: string) {
 function RecentActionCell({ s }: { s: SessionRow }) {
   if (s.status === 'reviewing') {
     return (
-      <Link href={`/sessions/${s.id}/review`}>
+      <Link href={`/accounting/sessions/${s.id}/review`}>
         <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2">
           <Eye className="w-3 h-3" /> Review
         </Button>
@@ -48,7 +48,7 @@ function RecentActionCell({ s }: { s: SessionRow }) {
   }
   if (s.status === 'pending_signoff') {
     return (
-      <Link href={`/sessions/${s.id}/signoff`}>
+      <Link href={`/accounting/sessions/${s.id}/signoff`}>
         <Button size="sm" className="gap-1 text-xs h-7 px-2">
           <ClipboardCheck className="w-3 h-3" /> TTD
         </Button>
@@ -57,7 +57,7 @@ function RecentActionCell({ s }: { s: SessionRow }) {
   }
   if (s.status === 'signed_off') {
     return (
-      <Link href={`/sessions/${s.id}/signoff`}>
+      <Link href={`/accounting/sessions/${s.id}/signoff`}>
         <Button size="sm" variant="outline" className="gap-1 text-xs h-7 px-2">
           <Eye className="w-3 h-3" /> Lihat
         </Button>
@@ -154,7 +154,7 @@ export default function DashboardPage() {
           <h1 className="text-xl font-semibold text-slate-800">Dashboard</h1>
           <p className="text-sm text-slate-500 mt-0.5">Ringkasan rekonsiliasi keuangan.</p>
         </div>
-        <Link href="/sessions/new">
+        <Link href="/accounting/sessions/new">
           <Button size="sm" className="gap-1.5">
             <Plus className="w-3.5 h-3.5" /> Rekonsiliasi Baru
           </Button>
@@ -262,14 +262,14 @@ export default function DashboardPage() {
               </div>
               <div className="flex gap-2 shrink-0">
                 {stats.pendingSignoff > 0 && (
-                  <Link href="/signoff">
+                  <Link href="/accounting/signoff">
                     <Button size="sm" className="gap-1 text-xs h-7">
                       Tanda Tangani <ArrowRight className="w-3 h-3" />
                     </Button>
                   </Link>
                 )}
                 {stats.reviewing > 0 && (
-                  <Link href="/history">
+                  <Link href="/accounting/history">
                     <Button size="sm" variant="outline" className="gap-1 text-xs h-7">
                       Lihat Review <ArrowRight className="w-3 h-3" />
                     </Button>
@@ -283,7 +283,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-700">Sesi Terbaru</h2>
-              <Link href="/history" className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+              <Link href="/accounting/history" className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
                 Lihat semua <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
@@ -292,7 +292,7 @@ export default function DashboardPage() {
               <div className="flex flex-col items-center justify-center py-16 text-slate-400">
                 <FileText className="w-10 h-10 mb-2 opacity-20" />
                 <p className="text-sm">Belum ada sesi rekonsiliasi.</p>
-                <Link href="/sessions/new">
+                <Link href="/accounting/sessions/new">
                   <Button size="sm" className="mt-3 gap-1.5">
                     <Plus className="w-3.5 h-3.5" /> Buat Sesi Pertama
                   </Button>
