@@ -58,23 +58,43 @@ Use `expect` with password `makeithappen` for automated deploy (see previous ses
 | FRO-32       | Delete reconciliation session feature | ✅ Done |
 | FRO-33       | Add mutation file to existing session + re-run reconciliation | ✅ Done |
 | FRO-34       | Decouple outlets from entities — entityId optional | ✅ Done |
+| FRO-35       | BSpace superapp: /home landing + /accounting/* sub-paths + /villa-analytics placeholder | ✅ Done |
+
+## Route Structure (Superapp)
+- `/` → redirects to `/home`
+- `/home` → superapp landing (2 CTA cards)
+- `/accounting` → accounting module dashboard (canonical; `/dashboard` redirects here)
+- `/accounting/sessions/new` → 3-step upload wizard
+- `/accounting/sessions/[id]/review` → review matched/unmatched/discrepancies
+- `/accounting/sessions/[id]/signoff` → sign-off detail
+- `/accounting/signoff` → sign-off queue
+- `/accounting/history` → session history
+- `/accounting/discrepancies` → discrepancy management
+- `/accounting/admin/master-data` → master data
+- `/accounting/admin/audit-log` → audit log
+- `/accounting/admin/users` → user management
+- `/villa-analytics` → Villa Report Analytics (placeholder, to be built)
 
 ## Key File Map
 ```
 app/
   (app)/          ← authenticated routes (protected by middleware)
     layout.tsx    ← OutletProvider + Navbar wrapper
-    dashboard/            ← FIN-12: metrics dashboard (stat cards + recent sessions)
-    sessions/new/        ← 3-step upload wizard
-    sessions/[id]/review/ ← FIN-09: review matched/unmatched/discrepancies
-    sessions/[id]/signoff/ ← FIN-10: sign-off detail (manager approve/reject)
-    signoff/              ← FIN-10: sign-off queue (pending_signoff sessions)
-    history/               ← FIN-11: full session list with filters & sorting
-    discrepancies/         ← FIN-15: cross-session discrepancy management (admin+finance)
-    admin/
-      users/      ← user management (admin only)
-      master-data/
-      audit-log/
+    home/         ← superapp landing page (2 CTA tiles)
+    accounting/   ← BSpace Accounting Reconciliation module
+      page.tsx              ← dashboard (stat cards + recent sessions)
+      sessions/new/         ← 3-step upload wizard
+      sessions/[id]/review/ ← FIN-09: review matched/unmatched/discrepancies
+      sessions/[id]/signoff/ ← FIN-10: sign-off detail (manager approve/reject)
+      signoff/              ← FIN-10: sign-off queue (pending_signoff sessions)
+      history/              ← FIN-11: full session list with filters & sorting
+      discrepancies/        ← FIN-15: cross-session discrepancy management (admin+finance)
+      admin/
+        users/      ← user management (admin only)
+        master-data/
+        audit-log/
+    dashboard/    ← redirects to /accounting (backwards compat)
+    villa-analytics/ ← BSpace Villa Report Analytics (placeholder)
   (auth)/
     login/        ← dark-themed login form
   api/
