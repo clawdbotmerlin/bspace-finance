@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
-import { Navbar } from '@/components/layout/Navbar'
+import { NavbarWrapper } from '@/components/layout/NavbarWrapper'
 import { OutletProvider } from '@/components/providers/OutletProvider'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <OutletProvider>
-      <Navbar userName={userName} userRole={userRole} />
+      <NavbarWrapper userName={userName} userRole={userRole} />
       <main className="pt-12 min-h-screen bg-[#f0f2f5]">
         {children}
       </main>
