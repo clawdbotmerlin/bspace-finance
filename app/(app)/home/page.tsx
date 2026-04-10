@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Calculator, BarChart3, ArrowRight, Lock } from 'lucide-react'
+import { Calculator, BarChart3, ArrowRight } from 'lucide-react'
 
 export default function HomePage() {
   return (
@@ -46,15 +46,13 @@ export default function HomePage() {
             </div>
           </Link>
 
-          {/* Villa Report Analytics — coming soon */}
-          <div className="group relative bg-white rounded-2xl border border-slate-200 shadow-sm p-8 flex flex-col overflow-hidden opacity-70 cursor-not-allowed select-none">
+          {/* Villa Report Analytics */}
+          <Link
+            href="/villa-analytics"
+            className="group relative bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all duration-200 p-8 flex flex-col overflow-hidden"
+          >
             {/* accent stripe */}
             <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-500 rounded-t-2xl" />
-
-            {/* lock badge */}
-            <div className="absolute top-4 right-4 flex items-center gap-1 bg-slate-100 text-slate-400 text-[10px] font-semibold px-2 py-0.5 rounded-full">
-              <Lock className="w-2.5 h-2.5" /> Segera Hadir
-            </div>
 
             <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center mb-5">
               <BarChart3 className="w-6 h-6 text-emerald-600" />
@@ -70,10 +68,10 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="mt-6 flex items-center text-slate-400 text-sm font-semibold gap-1">
-              <Lock className="w-3.5 h-3.5" /> Belum Tersedia
+            <div className="mt-6 flex items-center text-emerald-600 text-sm font-semibold group-hover:gap-2 gap-1 transition-all">
+              Buka Modul <ArrowRight className="w-4 h-4" />
             </div>
-          </div>
+          </Link>
 
         </div>
       </div>

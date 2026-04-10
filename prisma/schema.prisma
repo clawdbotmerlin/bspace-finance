@@ -73,6 +73,7 @@ model User {
   signedOffSessions    ReconciliationSession[]  @relation("SignedOffBy")
   resolvedDiscrepancies Discrepancy[]           @relation("ResolvedBy")
   auditLogs            AuditLog[]
+  villaUploads         VillaUpload[]
 }
 
 model Entity {
@@ -225,6 +226,37 @@ model Discrepancy {
   cashierEntry CashierEntry?         @relation(fields: [cashierEntryId], references: [id])
   bankMutation BankMutation?         @relation(fields: [bankMutationId], references: [id])
   resolver     User?                 @relation("ResolvedBy", fields: [resolvedBy], references: [id])
+}
+
+// ─── Villa Analytics ─────────────────────────────────────────────────────────
+
+model VillaUpload {
+  id           String        @id @default(cuid())
+  fileName     String
+  uploadedAt   DateTime      @default(now())
+  uploadedById String
+  uploadedBy   User          @relation(fields: [uploadedById], references: [id])
+  bookings     VillaBooking[]
+}
+
+model VillaBooking {
+  id                String      @id @default(cuid())
+  uploadId          String
+  upload            VillaUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  status            String
+  checkIn           DateTime    @db.Date
+  checkOut          DateTime    @db.Date
+  source            String
+  accommodationFare Decimal     @db.Decimal(18, 2)
+  totalPayout       Decimal     @db.Decimal(18, 2)
+  listing           String
+  listingId         String
+  guestName         String
+  numberOfNights    Int
+  numberOfGuests    Int
+  createdAt         DateTime    @default(now())
+
+  @@unique([listingId, checkIn])
 }
 
 // ─── Audit ────────────────────────────────────────────────────────────────────

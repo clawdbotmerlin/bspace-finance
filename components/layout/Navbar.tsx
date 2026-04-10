@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import {
   ChevronDown, LayoutDashboard, Plus, History, Database, ScrollText,
-  Users, LogOut, Menu, X, ClipboardCheck, AlertTriangle, Bell, ClipboardList,
+  Users, LogOut, Menu, X, ClipboardCheck, AlertTriangle, Bell, ClipboardList, BarChart3,
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
@@ -33,6 +33,7 @@ const NAV_ITEMS = [
   { href: '/accounting/history', label: 'Riwayat', icon: History, roles: ['admin', 'finance', 'manager'] },
   { href: '/accounting/signoff', label: 'Persetujuan', icon: ClipboardCheck, roles: ['admin', 'manager'] },
   { href: '/accounting/discrepancies', label: 'Diskrepansi', icon: AlertTriangle, roles: ['admin', 'finance'] },
+  { href: '/villa-analytics', label: 'Villa Analytics', icon: BarChart3, roles: ['admin', 'finance'] },
   { href: '/accounting/admin/master-data', label: 'Data Master', icon: Database, roles: ['admin'] },
   { href: '/accounting/admin/audit-log', label: 'Log Audit', icon: ScrollText, roles: ['admin'] },
   { href: '/accounting/admin/users', label: 'Pengguna', icon: Users, roles: ['admin'] },

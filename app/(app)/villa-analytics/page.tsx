@@ -1,38 +1,518 @@
 'use client'
 
-import Link from 'next/link'
-import { BarChart3, ArrowLeft, Clock } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { BarChart3, Upload, Download, X, FileText, AlertCircle, CheckCircle2, Loader2, Search, Calendar } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface VillaBooking {
+  id: string
+  status: string
+  checkIn: string
+  checkOut: string
+  source: string
+  accommodationFare: string
+  totalPayout: string
+  listing: string
+  listingId: string
+  guestName: string
+  numberOfNights: number
+  numberOfGuests: number
+}
+
+interface UploadResult {
+  uploadId: string
+  parsed: number
+  upserted: number
+  skipped: number
+  errors: string[]
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtDate(d: string) {
+  return new Date(d).toLocaleDateString('id-ID', {
+    day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
+  })
+}
+
+function fmtIDR(n: string | number) {
+  const v = typeof n === 'string' ? parseFloat(n) : n
+  return new Intl.NumberFormat('id-ID', { style: 'decimal' }).format(v)
+}
+
+function statusVariant(s: string): 'success' | 'warning' | 'outline' {
+  if (s === 'confirmed') return 'success'
+  if (s === 'inquiry') return 'warning'
+  return 'outline'
+}
+
+// ─── Upload Modal ─────────────────────────────────────────────────────────────
+
+function UploadModal({
+  open,
+  onClose,
+  onSuccess,
+}: {
+  open: boolean
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [file, setFile] = useState<File | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [result, setResult] = useState<UploadResult | null>(null)
+  const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function reset() {
+    setFile(null)
+    setResult(null)
+    setError('')
+    setUploading(false)
+  }
+
+  function handleClose() {
+    reset()
+    onClose()
+  }
+
+  function handleFile(f: File) {
+    if (!f.name.endsWith('.csv')) {
+      setError('Hanya file .csv yang diterima.')
+      return
+    }
+    setError('')
+    setResult(null)
+    setFile(f)
+  }
+
+  async function handleUpload() {
+    if (!file) return
+    setUploading(true)
+    setError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/villa/upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Upload gagal.')
+      } else {
+        setResult(data)
+        onSuccess()
+      }
+    } catch {
+      setError('Terjadi kesalahan jaringan.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Upload className="w-4 h-4 text-emerald-600" />
+            Upload Guesty CSV
+          </DialogTitle>
+        </DialogHeader>
+
+        {result ? (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-emerald-800">Upload berhasil</p>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  {result.upserted} booking disimpan · {result.skipped} baris dilewati
+                </p>
+              </div>
+            </div>
+            {result.errors.length > 0 && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+                <p className="text-xs font-semibold text-amber-800 mb-1">Peringatan ({result.errors.length})</p>
+                <ul className="text-xs text-amber-700 space-y-0.5 max-h-28 overflow-y-auto">
+                  {result.errors.map((e, i) => <li key={i}>• {e}</li>)}
+                </ul>
+              </div>
+            )}
+            <Button className="w-full" onClick={handleClose}>Tutup</Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Drop zone */}
+            <div
+              className={cn(
+                'border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors',
+                dragging ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-emerald-300 hover:bg-slate-50',
+                file ? 'border-emerald-400 bg-emerald-50' : ''
+              )}
+              onClick={() => inputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDragging(false)
+                const f = e.dataTransfer.files[0]
+                if (f) handleFile(f)
+              }}
+            >
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
+              />
+              {file ? (
+                <div className="flex items-center justify-center gap-2">
+                  <FileText className="w-5 h-5 text-emerald-600" />
+                  <span className="text-sm font-medium text-emerald-800">{file.name}</span>
+                  <button
+                    className="p-0.5 rounded hover:bg-emerald-100"
+                    onClick={(e) => { e.stopPropagation(); setFile(null) }}
+                  >
+                    <X className="w-3.5 h-3.5 text-emerald-600" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm text-slate-500">
+                    Drag &amp; drop file CSV di sini, atau <span className="text-emerald-600 font-medium">pilih file</span>
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">Hanya .csv (Guesty export)</p>
+                </>
+              )}
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={handleClose} disabled={uploading}>
+                Batal
+              </Button>
+              <Button
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                disabled={!file || uploading}
+                onClick={handleUpload}
+              >
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {uploading ? 'Mengupload…' : 'Upload & Simpan'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function VillaAnalyticsPage() {
+  const [bookings, setBookings] = useState<VillaBooking[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
+  const [filterListing, setFilterListing] = useState('')
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  const fetchBookings = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const params = new URLSearchParams()
+      if (filterFrom) params.set('from', filterFrom)
+      if (filterTo) params.set('to', filterTo)
+      if (filterListing) params.set('listing', filterListing)
+      const res = await fetch(`/api/villa/bookings?${params}`)
+      if (!res.ok) throw new Error('Gagal memuat data.')
+      setBookings(await res.json())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Terjadi kesalahan.')
+    } finally {
+      setLoading(false)
+    }
+  }, [filterFrom, filterTo, filterListing])
+
+  useEffect(() => {
+    const t = setTimeout(fetchBookings, filterListing ? 300 : 0)
+    return () => clearTimeout(t)
+  }, [fetchBookings])
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const params = new URLSearchParams()
+      if (filterFrom) params.set('from', filterFrom)
+      if (filterTo) params.set('to', filterTo)
+      if (filterListing) params.set('listing', filterListing)
+      const res = await fetch(`/api/villa/bookings/export?${params}`)
+      if (!res.ok) {
+        const d = await res.json()
+        alert(d.error ?? 'Export gagal.')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'villa-report.xlsx'
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // Unique listings in current result set (for per-listing export chips)
+  const uniqueListings = Array.from(new Set(bookings.map((b) => b.listing))).sort()
+
+  async function handleExportListing(listing: string) {
+    const params = new URLSearchParams({ listing })
+    if (filterFrom) params.set('from', filterFrom)
+    if (filterTo) params.set('to', filterTo)
+    const res = await fetch(`/api/villa/bookings/export?${params}`)
+    if (!res.ok) { alert('Export gagal.'); return }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'villa-report.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const confirmedCount = bookings.filter((b) => b.status === 'confirmed').length
+  const totalGross = bookings.reduce((s, b) => s + parseFloat(b.accommodationFare), 0)
+  const totalPayout = bookings.reduce((s, b) => s + parseFloat(b.totalPayout), 0)
+
   return (
-    <div className="min-h-[calc(100vh-48px)] bg-[#f0f2f5] flex flex-col items-center justify-center px-6">
-      <div className="w-full max-w-md text-center">
-        {/* Icon */}
-        <div className="w-20 h-20 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto mb-6">
-          <BarChart3 className="w-10 h-10 text-emerald-500" />
+    <div className="p-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+            <BarChart3 className="w-5 h-5 text-emerald-600" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-slate-800">Villa Report Analytics</h1>
+            <p className="text-sm text-slate-500 mt-0.5">Data booking Guesty — upload harian &amp; laporan keuangan</p>
+          </div>
         </div>
-
-        {/* Badge */}
-        <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold px-3 py-1 rounded-full mb-4">
-          <Clock className="w-3.5 h-3.5" />
-          Segera Hadir
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={bookings.length === 0 || exporting}
+            onClick={handleExport}
+          >
+            {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            Export Excel
+          </Button>
+          <Button
+            size="sm"
+            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+            onClick={() => setUploadOpen(true)}
+          >
+            <Upload className="w-3.5 h-3.5" />
+            Upload CSV
+          </Button>
         </div>
-
-        <h1 className="text-2xl font-bold text-slate-800 mb-3">
-          Villa Report Analytics
-        </h1>
-        <p className="text-slate-500 text-sm leading-relaxed mb-8">
-          Modul analitik laporan villa sedang dalam pengembangan. Pantau pendapatan, tingkat hunian, dan performa operasional outlet secara real-time.
-        </p>
-
-        <Link
-          href="/home"
-          className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Kembali ke Beranda
-        </Link>
       </div>
+
+      {/* Summary cards */}
+      {!loading && bookings.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          {[
+            { label: 'Total Booking', value: bookings.length, sub: `${confirmedCount} confirmed` },
+            { label: 'Listing Unik', value: uniqueListings.length, sub: 'dalam filter ini' },
+            { label: 'Gross Revenue', value: `Rp ${fmtIDR(totalGross)}`, sub: 'Accommodation Fare' },
+            { label: 'Total Payout', value: `Rp ${fmtIDR(totalPayout)}`, sub: 'Setelah biaya OTA' },
+          ].map((c) => (
+            <div key={c.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{c.label}</p>
+              <p className="text-xl font-bold text-slate-800 leading-none">{c.value}</p>
+              <p className="text-xs text-slate-400 mt-1">{c.sub}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+          <Calendar className="w-3.5 h-3.5" />
+          Check-in dari
+        </div>
+        <Input
+          type="date"
+          value={filterFrom}
+          onChange={(e) => setFilterFrom(e.target.value)}
+          className="h-8 text-xs w-36"
+        />
+        <span className="text-xs text-slate-400">s/d</span>
+        <Input
+          type="date"
+          value={filterTo}
+          onChange={(e) => setFilterTo(e.target.value)}
+          className="h-8 text-xs w-36"
+        />
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <Input
+            placeholder="Cari listing…"
+            value={filterListing}
+            onChange={(e) => setFilterListing(e.target.value)}
+            className="h-8 text-xs pl-8 w-52"
+          />
+        </div>
+        {(filterFrom || filterTo || filterListing) && (
+          <button
+            onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterListing('') }}
+            className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
+          >
+            <X className="w-3 h-3" /> Reset
+          </button>
+        )}
+      </div>
+
+      {/* Per-listing export chips */}
+      {uniqueListings.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          <span className="text-xs text-slate-500 self-center">Export per listing:</span>
+          {uniqueListings.map((l) => (
+            <button
+              key={l}
+              onClick={() => handleExportListing(l)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors"
+            >
+              <Download className="w-3 h-3" />
+              {l.length > 40 ? l.slice(0, 40) + '…' : l}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 mb-4">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span className="text-sm">Memuat data…</span>
+          </div>
+        ) : bookings.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <BarChart3 className="w-10 h-10 mb-2 opacity-20" />
+            <p className="text-sm">Belum ada data booking.</p>
+            <p className="text-xs mt-1 text-slate-400">Upload file CSV Guesty untuk memulai.</p>
+            <Button
+              size="sm"
+              className="mt-4 gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => setUploadOpen(true)}
+            >
+              <Upload className="w-3.5 h-3.5" /> Upload Sekarang
+            </Button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  {['Check-in', 'Check-out', 'Tamu', 'Listing', 'Malam', 'OTA', 'Gross (IDR)', 'Payout (IDR)', 'Status', ''].map((h) => (
+                    <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {bookings.map((b) => (
+                  <tr key={b.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors">
+                    <td className="px-3 py-2.5 text-xs font-medium text-slate-700 whitespace-nowrap">
+                      {fmtDate(b.checkIn)}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
+                      {fmtDate(b.checkOut)}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-slate-700 max-w-[140px] truncate">
+                      {b.guestName || '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-slate-600 max-w-[200px]">
+                      <span className="line-clamp-2 leading-tight">{b.listing}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-center text-slate-600">
+                      {b.numberOfNights}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-slate-600 uppercase whitespace-nowrap">
+                      {b.source}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-right font-medium text-slate-700 whitespace-nowrap">
+                      {fmtIDR(b.accommodationFare)}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-right text-slate-600 whitespace-nowrap">
+                      {fmtIDR(b.totalPayout)}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <Badge variant={statusVariant(b.status)} className="text-[10px] capitalize">
+                        {b.status}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <button
+                        onClick={() => handleExportListing(b.listing)}
+                        className="p-1 rounded hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 transition-colors"
+                        title="Export Excel untuk listing ini"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Row count */}
+      {!loading && bookings.length > 0 && (
+        <p className="text-xs text-slate-400 mt-2 text-right">
+          {bookings.length} booking ditampilkan
+        </p>
+      )}
+
+      <UploadModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onSuccess={fetchBookings}
+      />
     </div>
   )
 }
