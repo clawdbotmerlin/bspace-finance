@@ -33,9 +33,23 @@ export interface VillaBookingParseResult {
 // 9  GUEST'S NAME
 // 10 NUMBER OF GUESTS
 
+function excelSerialToDate(serial: number): string {
+  // Excel epoch is Dec 30, 1899 (accounting for the 1900 leap year bug)
+  const excelEpoch = Date.UTC(1899, 11, 30)
+  const date = new Date(excelEpoch + Math.floor(serial) * 86400000)
+  return date.toISOString().slice(0, 10)
+}
+
 function parseDate(raw: string): string {
   if (!raw) throw new Error('Missing date')
   const s = String(raw).trim()
+
+  // Excel serial number — xlsx auto-converts CSV date strings like "4/9/2026 15:00"
+  // into serials (e.g. 46121.625). Range 40000–60000 covers 2009–2064.
+  const serial = parseFloat(s)
+  if (!isNaN(serial) && serial > 40000 && serial < 60000) {
+    return excelSerialToDate(serial)
+  }
 
   // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
@@ -47,11 +61,9 @@ function parseDate(raw: string): string {
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
 
-  // Try native parse as fallback
+  // Native parse fallback
   const dt = new Date(s)
-  if (!isNaN(dt.getTime())) {
-    return dt.toISOString().slice(0, 10)
-  }
+  if (!isNaN(dt.getTime())) return dt.toISOString().slice(0, 10)
 
   throw new Error(`Cannot parse date: "${s}"`)
 }
