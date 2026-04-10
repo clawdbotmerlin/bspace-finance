@@ -84,7 +84,7 @@ export function Navbar({ userName, userRole }: NavbarProps) {
     <>
       <nav className="fixed top-0 left-0 right-0 z-50 h-12 bg-[#0d1b2a] border-b border-white/[0.08] flex items-stretch px-4">
         {/* Brand */}
-        <Link href="/dashboard" className="flex items-center gap-1 shrink-0 mr-4 pr-4 border-r border-white/[0.08]">
+        <Link href="/home" className="flex items-center gap-1 shrink-0 mr-4 pr-4 border-r border-white/[0.08]">
           <span className="text-white font-bold text-[15px] tracking-tight">
             BSpace <span className="text-blue-400">Finance</span>
           </span>
