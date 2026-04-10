@@ -28,7 +28,7 @@ interface NotifCounts {
 }
 
 const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'finance', 'manager'] },
+  { href: '/accounting', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'finance', 'manager'] },
   { href: '/sessions/new', label: 'Rekonsiliasi Baru', icon: Plus, roles: ['admin', 'finance'] },
   { href: '/history', label: 'Riwayat', icon: History, roles: ['admin', 'finance', 'manager'] },
   { href: '/signoff', label: 'Persetujuan', icon: ClipboardCheck, roles: ['admin', 'manager'] },
