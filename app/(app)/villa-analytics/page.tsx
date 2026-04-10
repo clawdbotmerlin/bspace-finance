@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { BarChart3, Upload, Download, X, FileText, AlertCircle, CheckCircle2, Loader2, Search, Calendar } from 'lucide-react'
+import { BarChart3, Upload, Download, X, FileText, AlertCircle, CheckCircle2, Loader2, Search, Calendar, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,9 @@ import { cn } from '@/lib/utils'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +50,32 @@ function fmtIDR(n: string | number) {
   const v = typeof n === 'string' ? parseFloat(n) : n
   return new Intl.NumberFormat('id-ID', { style: 'decimal' }).format(v)
 }
+
+// YYYY-MM-DD of a local date
+function toYMD(d: Date): string {
+  return d.toLocaleDateString('en-CA') // returns YYYY-MM-DD
+}
+
+type Preset = 'today' | 'tomorrow' | 'week' | 'month' | 'year' | ''
+
+function presetRange(p: Preset): { from: string; to: string } {
+  const now = new Date()
+  const y = now.getFullYear(), m = now.getMonth(), d = now.getDate()
+  if (p === 'today')    { const t = new Date(y, m, d); return { from: toYMD(t), to: toYMD(t) } }
+  if (p === 'tomorrow') { const t = new Date(y, m, d + 1); return { from: toYMD(t), to: toYMD(t) } }
+  if (p === 'week')     { const mon = new Date(y, m, d - ((now.getDay() + 6) % 7)); const sun = new Date(y, m, d - ((now.getDay() + 6) % 7) + 6); return { from: toYMD(mon), to: toYMD(sun) } }
+  if (p === 'month')    { return { from: toYMD(new Date(y, m, 1)), to: toYMD(new Date(y, m + 1, 0)) } }
+  if (p === 'year')     { return { from: toYMD(new Date(y, 0, 1)), to: toYMD(new Date(y, 11, 31)) } }
+  return { from: '', to: '' }
+}
+
+const PRESETS: { key: Preset; label: string }[] = [
+  { key: 'today',    label: 'Hari ini' },
+  { key: 'tomorrow', label: 'Besok' },
+  { key: 'week',     label: 'Minggu ini' },
+  { key: 'month',    label: 'Bulan ini' },
+  { key: 'year',     label: 'Tahun ini' },
+]
 
 function statusVariant(s: string): 'success' | 'warning' | 'outline' {
   if (s === 'confirmed') return 'success'
@@ -231,6 +260,7 @@ export default function VillaAnalyticsPage() {
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
   const [filterListing, setFilterListing] = useState('')
+  const [activePreset, setActivePreset] = useState<Preset>('')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
 
@@ -282,7 +312,21 @@ export default function VillaAnalyticsPage() {
     }
   }
 
-  // Unique listings in current result set (for per-listing export chips)
+  function applyPreset(p: Preset) {
+    const { from, to } = presetRange(p)
+    setFilterFrom(from)
+    setFilterTo(to)
+    setActivePreset(p)
+  }
+
+  function resetFilters() {
+    setFilterFrom('')
+    setFilterTo('')
+    setFilterListing('')
+    setActivePreset('')
+  }
+
+  // Unique listings in current result set (for per-listing export dropdown)
   const uniqueListings = Array.from(new Set(bookings.map((b) => b.listing))).sort()
 
   async function handleExportListing(listing: string) {
@@ -358,59 +402,104 @@ export default function VillaAnalyticsPage() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="flex items-center gap-1.5 text-xs text-slate-500">
-          <Calendar className="w-3.5 h-3.5" />
-          Check-in dari
-        </div>
-        <Input
-          type="date"
-          value={filterFrom}
-          onChange={(e) => setFilterFrom(e.target.value)}
-          className="h-8 text-xs w-36"
-        />
-        <span className="text-xs text-slate-400">s/d</span>
-        <Input
-          type="date"
-          value={filterTo}
-          onChange={(e) => setFilterTo(e.target.value)}
-          className="h-8 text-xs w-36"
-        />
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <Input
-            placeholder="Cari listing…"
-            value={filterListing}
-            onChange={(e) => setFilterListing(e.target.value)}
-            className="h-8 text-xs pl-8 w-52"
-          />
-        </div>
-        {(filterFrom || filterTo || filterListing) && (
-          <button
-            onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterListing('') }}
-            className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
-          >
-            <X className="w-3 h-3" /> Reset
-          </button>
-        )}
-      </div>
-
-      {/* Per-listing export chips */}
-      {uniqueListings.length > 1 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          <span className="text-xs text-slate-500 self-center">Export per listing:</span>
-          {uniqueListings.map((l) => (
+      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4 space-y-3 shadow-sm">
+        {/* Quick presets */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-slate-500 mr-1">Cepat:</span>
+          {PRESETS.map((p) => (
             <button
-              key={l}
-              onClick={() => handleExportListing(l)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors"
+              key={p.key}
+              onClick={() => applyPreset(p.key)}
+              className={cn(
+                'px-3 py-1 rounded-full text-xs font-medium transition-colors border',
+                activePreset === p.key
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-400 hover:text-emerald-700'
+              )}
             >
-              <Download className="w-3 h-3" />
-              {l.length > 40 ? l.slice(0, 40) + '…' : l}
+              {p.label}
             </button>
           ))}
         </div>
-      )}
+
+        {/* Date range + listing search */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <Calendar className="w-3.5 h-3.5" />
+            Check-in dari
+          </div>
+          <Input
+            type="date"
+            value={filterFrom}
+            onChange={(e) => { setFilterFrom(e.target.value); setActivePreset('') }}
+            className="h-8 text-xs w-36"
+          />
+          <span className="text-xs text-slate-400">s/d</span>
+          <Input
+            type="date"
+            value={filterTo}
+            onChange={(e) => { setFilterTo(e.target.value); setActivePreset('') }}
+            className="h-8 text-xs w-36"
+          />
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <Input
+              placeholder="Cari listing…"
+              value={filterListing}
+              onChange={(e) => setFilterListing(e.target.value)}
+              className="h-8 text-xs pl-8 w-52"
+            />
+          </div>
+          {(filterFrom || filterTo || filterListing) && (
+            <button
+              onClick={resetFilters}
+              className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
+            >
+              <X className="w-3 h-3" /> Reset
+            </button>
+          )}
+
+          {/* Export per listing dropdown — only when data exists */}
+          {uniqueListings.length > 0 && (
+            <div className="ml-auto">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
+                    <Download className="w-3.5 h-3.5" />
+                    Export per Listing
+                    <ChevronDown className="w-3 h-3 ml-0.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto min-w-[280px]">
+                  <div className="px-2 py-1.5 border-b">
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                      {uniqueListings.length} listing dalam filter ini
+                    </p>
+                  </div>
+                  {uniqueListings.map((l) => (
+                    <DropdownMenuItem
+                      key={l}
+                      onClick={() => handleExportListing(l)}
+                      className="gap-2 cursor-pointer text-xs"
+                    >
+                      <Download className="w-3 h-3 text-emerald-600 shrink-0" />
+                      <span className="truncate">{l}</span>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleExport}
+                    className="gap-2 cursor-pointer text-xs font-medium text-emerald-700"
+                  >
+                    <Download className="w-3 h-3 shrink-0" />
+                    Export semua listing sekaligus
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Error */}
       {error && (
