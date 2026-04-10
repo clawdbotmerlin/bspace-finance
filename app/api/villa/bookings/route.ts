@@ -10,8 +10,10 @@ export const GET = withAuth(async (req: NextRequest) => {
 
   const bookings = await prisma.villaBooking.findMany({
     where: {
-      ...(from ? { checkIn: { gte: new Date(from) } } : {}),
-      ...(to ? { checkIn: { lte: new Date(to) } } : {}),
+      checkIn: {
+        ...(from ? { gte: new Date(from) } : {}),
+        ...(to ? { lte: new Date(to) } : {}),
+      },
       ...(listing ? { listing: { contains: listing, mode: 'insensitive' } } : {}),
     },
     orderBy: { checkIn: 'desc' },

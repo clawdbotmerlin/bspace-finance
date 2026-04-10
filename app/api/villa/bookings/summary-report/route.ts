@@ -37,9 +37,11 @@ export const GET = withAuth(async (req: NextRequest) => {
 
   const bookings = await prisma.villaBooking.findMany({
     where: {
+      checkIn: {
+        ...(from ? { gte: new Date(from) } : {}),
+        ...(to ? { lte: new Date(to) } : {}),
+      },
       ...(listingFilter ? { listing: { contains: listingFilter, mode: 'insensitive' } } : {}),
-      ...(from ? { checkIn: { gte: new Date(from) } } : {}),
-      ...(to ? { checkIn: { lte: new Date(to) } } : {}),
     },
     orderBy: { listing: 'asc' },
   })
