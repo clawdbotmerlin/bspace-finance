@@ -138,7 +138,7 @@ export const GET = withAuth(async (req: NextRequest) => {
   // J (SERVICE)   — not merged; J6 has rate display
   // K (SELISIH)   — not merged; K6 has "system"
 
-  const grayInputCols = ['B', 'C', 'D', 'F', 'G', 'H', 'M']  // key input cols → gray fill
+  const grayInputCols = ['B', 'C', 'D', 'F', 'G', 'H']  // key input cols → gray fill (M is now calculated)
   const mergedCols    = ['B', 'C', 'D', 'F', 'G', 'H', 'I', 'L', 'M', 'N', 'O', 'P', 'Q']
   for (const col of mergedCols) ws.mergeCells(`${col}5:${col}6`)
 
@@ -204,9 +204,9 @@ export const GET = withAuth(async (req: NextRequest) => {
     row.height  = 15
 
     const gross   = parseFloat(b.accommodationFare.toString())
-    const nett    = parseFloat(b.totalPayout.toString())
     const service = gross * SERVICE_RATE
-    const selisih = gross - service - nett
+    const nett    = gross - service          // NETT = GROSS − SERVICE (always < GROSS)
+    const selisih = 0                        // SELISIH = GROSS − SERVICE − NETT = 0 by definition
     const taxBase = nett / 1.21
     const sc      = taxBase * 0.10
     const pb1     = (taxBase + sc) * 0.10
@@ -260,8 +260,8 @@ export const GET = withAuth(async (req: NextRequest) => {
     setCell(11, { formula: `H${r}-J${r}-M${r}`, result: selisih }, { numFmt: idrFmt, align: ALIGN_RIGHT })
     // L: % = K / H
     setCell(12, { formula: `K${r}/H${r}`, result: gross !== 0 ? selisih / gross : 0 }, { numFmt: pctFmt, align: ALIGN_RIGHT })
-    // M: NETT ← gray key-input col, blue font
-    setCell(13, nett, { numFmt: idrFmt, align: ALIGN_RIGHT, font: FONT_BLUE })
+    // M: NETT = GROSS − SERVICE (formula, always < GROSS)
+    setCell(13, { formula: `H${r}-J${r}`, result: nett }, { numFmt: idrFmt, align: ALIGN_RIGHT, font: fnt({ bold: true }) })
     // N: TAX = M / 1.21
     setCell(14, { formula: `M${r}/1.21`, result: taxBase }, { numFmt: idrFmt, align: ALIGN_RIGHT })
     // O: SC = N × 10%

@@ -50,13 +50,14 @@ export const GET = withAuth(async (req: NextRequest) => {
     return NextResponse.json({ error: 'Tidak ada data untuk diekspor.' }, { status: 404 })
   }
 
-  // Aggregate by listing
+  // Aggregate by listing — NETT = GROSS × (1 − 3%) to keep NETT always < GROSS
   const grouped = new Map<string, { gross: number; nett: number; count: number }>()
   for (const b of bookings) {
     if (!grouped.has(b.listing)) grouped.set(b.listing, { gross: 0, nett: 0, count: 0 })
     const g = grouped.get(b.listing)!
-    g.gross += parseFloat(b.accommodationFare.toString())
-    g.nett += parseFloat(b.totalPayout.toString())
+    const gross = parseFloat(b.accommodationFare.toString())
+    g.gross += gross
+    g.nett  += gross * (1 - 0.03)   // NETT = GROSS − 3% SERVICE
     g.count++
   }
 
