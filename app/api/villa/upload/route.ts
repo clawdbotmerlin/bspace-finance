@@ -18,6 +18,19 @@ export const POST = withAuth(async (req: NextRequest, session) => {
     )
   }
 
+  // Pre-check which bookings already exist so we can report new vs updated
+  const existingKeys = new Set(
+    (await prisma.villaBooking.findMany({
+      where: {
+        OR: result.bookings.map((b) => ({
+          listingId: b.listingId,
+          checkIn: new Date(b.checkIn),
+        })),
+      },
+      select: { listingId: true, checkIn: true },
+    })).map((r) => `${r.listingId}::${r.checkIn.toISOString().slice(0, 10)}`)
+  )
+
   const upload = await prisma.villaUpload.create({
     data: {
       fileName: file.name,
@@ -25,8 +38,11 @@ export const POST = withAuth(async (req: NextRequest, session) => {
     },
   })
 
-  let upserted = 0
+  let created = 0
+  let updated = 0
+
   for (const b of result.bookings) {
+    const isExisting = existingKeys.has(`${b.listingId}::${b.checkIn}`)
     await prisma.villaBooking.upsert({
       where: {
         listingId_checkIn: {
@@ -61,14 +77,16 @@ export const POST = withAuth(async (req: NextRequest, session) => {
         numberOfGuests: b.numberOfGuests,
       },
     })
-    upserted++
+    if (isExisting) updated++; else created++
   }
 
   return NextResponse.json(
     {
       uploadId: upload.id,
       parsed: result.bookings.length,
-      upserted,
+      created,
+      updated,
+      upserted: created + updated,
       skipped: result.skipped,
       errors: result.errors,
     },

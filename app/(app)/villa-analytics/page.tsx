@@ -33,6 +33,8 @@ interface VillaBooking {
 interface UploadResult {
   uploadId: string
   parsed: number
+  created: number
+  updated: number
   upserted: number
   skipped: number
   errors: string[]
@@ -161,9 +163,19 @@ function UploadModal({
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-emerald-800">Upload berhasil</p>
-                <p className="text-xs text-emerald-700 mt-0.5">
-                  {result.upserted} booking disimpan · {result.skipped} baris dilewati
+                <p className="text-xs text-emerald-700 mt-1">
+                  <span className="font-semibold">{result.created}</span> booking baru ditambahkan
                 </p>
+                {result.updated > 0 && (
+                  <p className="text-xs text-emerald-600 mt-0.5">
+                    <span className="font-semibold">{result.updated}</span> sudah ada — diperbarui, tidak duplikat
+                  </p>
+                )}
+                {result.skipped > 0 && (
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    {result.skipped} baris dilewati
+                  </p>
+                )}
               </div>
             </div>
             {result.errors.length > 0 && (
