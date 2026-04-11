@@ -75,8 +75,27 @@ function parseAmount(raw: string): number {
   return isNaN(val) ? 0 : val
 }
 
+// Decode common UTF-8 mojibake caused by reading UTF-8 bytes as Windows-1252.
+// The em-dash U+2014 (UTF-8: E2 80 94) becomes â€" (U+00E2 U+20AC U+201D) under Windows-1252.
+export function fixEncoding(s: string): string {
+  return s
+    .replace(/\u00E2\u20AC\u201D/g, '\u2014') // — em-dash
+    .replace(/\u00E2\u20AC\u2013/g, '\u2013') // – en-dash
+    .replace(/\u00E2\u20AC\u2019/g, '\u2019') // ' right single quote
+    .replace(/\u00E2\u20AC\u02DC/g, '\u2018') // ' left single quote
+    .replace(/\u00E2\u20AC\u0153/g, '\u201C') // " left double quote
+    .replace(/\u00E2\u20AC/g,       '\u20AC') // € euro (standalone)
+    .replace(/\u00C3\u00A9/g,       '\u00E9') // é
+    .replace(/\u00C3\u00A0/g,       '\u00E0') // à
+    .replace(/\u00C3\u00B4/g,       '\u00F4') // ô
+    .trim()
+}
+
 export function parseVillaBookingCsv(buffer: ArrayBuffer): VillaBookingParseResult {
-  const wb = XLSX.read(new Uint8Array(buffer), { type: 'array', raw: false })
+  // Decode as UTF-8 string first to preserve Unicode characters (em-dash, accents etc.)
+  // then pass to xlsx as a pre-decoded string — avoids the Windows-1252 mojibake bug.
+  const text = new TextDecoder('utf-8').decode(new Uint8Array(buffer))
+  const wb = XLSX.read(text, { type: 'string', raw: false })
   const ws = wb.Sheets[wb.SheetNames[0]]
   const rows = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' })
 
@@ -100,7 +119,7 @@ export function parseVillaBookingCsv(buffer: ArrayBuffer): VillaBookingParseResu
         source: String(row[3] ?? '').trim(),
         accommodationFare: parseAmount(String(row[4])),
         totalPayout: parseAmount(String(row[5])),
-        listing: String(row[6] ?? '').trim(),
+        listing: fixEncoding(String(row[6] ?? '')),
         listingId: String(row[8] ?? '').trim(),
         guestName: String(row[9] ?? '').trim(),
         numberOfNights: parseInt(String(row[7] ?? '0'), 10) || 0,

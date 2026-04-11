@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/guards'
 import { prisma } from '@/lib/db'
 import ExcelJS from 'exceljs'
+import { fixEncoding } from '@/lib/parsers/villaBooking'
 
 // ─── Constants (matching CONTOH HITUNGAN) ────────────────────────────────────
 const SERVICE_RATE = 0.03
@@ -87,7 +88,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       },
       ...(listingFilter ? { listing: { contains: listingFilter, mode: 'insensitive' } } : {}),
     },
-    orderBy: [{ listing: 'asc' }, { checkIn: 'asc' }],
+    orderBy: { checkIn: 'asc' },
   })
 
   if (bookings.length === 0)
@@ -242,8 +243,8 @@ export const GET = withAuth(async (req: NextRequest) => {
     setCell(2, fmtDate(b.checkIn), { align: ALIGN_CENTER })
     // C: NAME
     setCell(3, b.guestName || '—')
-    // D: LISTING
-    setCell(4, b.listing)
+    // D: LISTING (fixEncoding cleans garbled UTF-8 already stored in DB)
+    setCell(4, fixEncoding(b.listing))
     // E: DATE STAY
     setCell(5, fmtStay(b.checkIn, b.checkOut), { align: ALIGN_CENTER })
     // F: NIGHT

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/guards'
 import { prisma } from '@/lib/db'
 import ExcelJS from 'exceljs'
+import { fixEncoding } from '@/lib/parsers/villaBooking'
 
 const MGMT_FEE_RATE = 0.17
 const idrFmt = '#,##0'
@@ -53,8 +54,9 @@ export const GET = withAuth(async (req: NextRequest) => {
   // Aggregate by listing — NETT = GROSS × (1 − 3%) to keep NETT always < GROSS
   const grouped = new Map<string, { gross: number; nett: number; count: number }>()
   for (const b of bookings) {
-    if (!grouped.has(b.listing)) grouped.set(b.listing, { gross: 0, nett: 0, count: 0 })
-    const g = grouped.get(b.listing)!
+    const listingKey = fixEncoding(b.listing)
+    if (!grouped.has(listingKey)) grouped.set(listingKey, { gross: 0, nett: 0, count: 0 })
+    const g = grouped.get(listingKey)!
     const gross = parseFloat(b.accommodationFare.toString())
     g.gross += gross
     g.nett  += gross * (1 - 0.03)   // NETT = GROSS − 3% SERVICE
@@ -157,6 +159,7 @@ export const GET = withAuth(async (req: NextRequest) => {
   const listings = Array.from(grouped.entries())
 
   listings.forEach(([listing, agg], idx) => {
+    // listing key is already fixEncoded from the grouping step
     const r = DATA_START + idx
     const row = ws.getRow(r)
     row.height = 15
