@@ -230,6 +230,14 @@ export const GET = withAuth(async (req: NextRequest) => {
     }
   })
 
+  // ── Pre-compute totals for accurate result values ────────────────────────────
+  const totGross  = listings.reduce((s, [, a]) => s + a.gross, 0)
+  const totNett   = listings.reduce((s, [, a]) => s + a.nett, 0)
+  const totOTA    = totGross - totNett
+  const totPB1    = listings.reduce((s, [, a]) => s + (a.nett / 1.21 * 1.1 * 0.1), 0)
+  const totMgmt   = totGross * MGMT_FEE_RATE
+  const totOwner  = totGross - totPB1 - totMgmt  // expense = 0 until staff fills in
+
   // ── Total row ────────────────────────────────────────────────────────────────
   const totalRow = DATA_START + listings.length
   const tr = ws.getRow(totalRow)
@@ -241,23 +249,22 @@ export const GET = withAuth(async (req: NextRequest) => {
   tr.getCell(2).fill = headerFill('FF1E3A5F')
   tr.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' }
 
-  const totalCols = [
-    { col: 4, letter: 'D' }, // Gross
-    { col: 5, letter: 'E' }, // OTA (formula referencing D total and F total)
-    { col: 6, letter: 'F' }, // NETT
-    { col: 7, letter: 'G' }, // Expense
-    { col: 8, letter: 'H' }, // PB1
-    { col: 9, letter: 'I' }, // Mgmt
-    { col: 10, letter: 'J' }, // Owner
+  const totalCols: { col: number; letter: string; result: number }[] = [
+    { col: 4,  letter: 'D', result: totGross  },
+    { col: 5,  letter: 'E', result: totOTA    },
+    { col: 6,  letter: 'F', result: totNett   },
+    { col: 7,  letter: 'G', result: 0         },  // Expense: manual, 0 placeholder
+    { col: 8,  letter: 'H', result: totPB1    },
+    { col: 9,  letter: 'I', result: totMgmt   },
+    { col: 10, letter: 'J', result: totOwner  },
   ]
 
-  for (const { col, letter } of totalCols) {
+  for (const { col, letter, result } of totalCols) {
     const cell = tr.getCell(col)
-    // For OTA column, use formula D_total - F_total
     const formula = letter === 'E'
       ? `D${totalRow}-F${totalRow}`
       : `SUM(${letter}${DATA_START}:${letter}${totalRow - 1})`
-    cell.value = { formula, result: 0 }
+    cell.value = { formula, result }
     cell.numFmt = idrFmt
     cell.font = { ...boldFont, color: { argb: 'FFFFFFFF' } }
     cell.fill = headerFill(col === 10 ? 'FF1E6B3A' : col === 7 ? 'FF9B7D00' : 'FF1E3A5F')
@@ -266,6 +273,9 @@ export const GET = withAuth(async (req: NextRequest) => {
       bottom: { style: 'thin', color: { argb: 'FFFFFFFF' } },
     }
   }
+
+  // Force Excel to recalculate all formulas on open
+  wb.calcProperties = { fullCalcOnLoad: true }
 
   // Freeze header rows
   ws.views = [{ state: 'frozen', ySplit: 7 }]

@@ -264,6 +264,7 @@ export default function VillaAnalyticsPage() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportingSummary, setExportingSummary] = useState(false)
+  const [exportingTable, setExportingTable] = useState(false)
 
   const fetchBookings = useCallback(async () => {
     setLoading(true)
@@ -310,6 +311,31 @@ export default function VillaAnalyticsPage() {
       URL.revokeObjectURL(url)
     } finally {
       setExporting(false)
+    }
+  }
+
+  async function handleTableExport() {
+    setExportingTable(true)
+    try {
+      const params = new URLSearchParams()
+      if (filterFrom) params.set('from', filterFrom)
+      if (filterTo) params.set('to', filterTo)
+      if (filterListing) params.set('listing', filterListing)
+      const res = await fetch(`/api/villa/bookings/table-export?${params}`)
+      if (!res.ok) {
+        const d = await res.json()
+        alert(d.error ?? 'Export gagal.')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'data-booking.xlsx'
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExportingTable(false)
     }
   }
 
@@ -392,21 +418,21 @@ export default function VillaAnalyticsPage() {
             variant="outline"
             size="sm"
             className="gap-1.5"
-            disabled={bookings.length === 0 || exportingSummary}
-            onClick={handleSummaryExport}
+            disabled={bookings.length === 0 || exportingTable}
+            onClick={handleTableExport}
           >
-            {exportingSummary ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-            Laporan Mingguan
+            {exportingTable ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            Export Tabel
           </Button>
           <Button
             variant="outline"
             size="sm"
             className="gap-1.5"
-            disabled={bookings.length === 0 || exporting}
-            onClick={handleExport}
+            disabled={bookings.length === 0 || exportingSummary}
+            onClick={handleSummaryExport}
           >
-            {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-            Detail per Listing
+            {exportingSummary ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            Laporan Mingguan
           </Button>
           <Button
             size="sm"
