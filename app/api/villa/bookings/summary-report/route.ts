@@ -289,7 +289,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     byListing.get(key)!.push(b)
   }
 
-  for (const [listingName, listingBookings] of byListing.entries()) {
+  for (const [listingName, listingBookings] of Array.from(byListing.entries())) {
     const sheetName = safeName(listingName)
     const ws2 = wb.addWorksheet(sheetName)
 
