@@ -69,7 +69,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     const g = grouped.get(listingKey)!
     const gross = parseFloat(b.accommodationFare.toString())
     g.gross += gross
-    g.nett  += gross * (1 - SVC_RATE)
+    g.nett  += parseFloat(b.totalPayout.toString())   // from Guesty
     g.count++
   }
 
@@ -397,8 +397,8 @@ export const GET = withAuth(async (req: NextRequest) => {
       totGross2 += gross
 
       const svc      = gross * SVC_RATE
-      const selisih  = svc       // DISCOUNT = 0, SELISIH = SERVICE + DISCOUNT
-      const nett     = gross - selisih
+      const nett     = parseFloat(b.totalPayout.toString())   // from Guesty
+      const selisih  = gross - svc - nett                      // actual delta
       const tax      = nett / 1.21
       const sc       = tax * 0.1
       const pb1      = (tax + sc) * 0.1
@@ -461,8 +461,8 @@ export const GET = withAuth(async (req: NextRequest) => {
       row.getCell(10).font = dataFont
       if (isEven) row.getCell(10).fill = headerFill(bgFill)
 
-      // K: SELISIH & DISC = SERVICE + DISCOUNT
-      row.getCell(11).value = { formula: `J${r}+I${r}`, result: selisih }
+      // K: SELISIH & DISC = GROSS − SERVICE − NETT (actual delta)
+      row.getCell(11).value = { formula: `H${r}-J${r}-M${r}`, result: selisih }
       row.getCell(11).numFmt = idrFmt
       row.getCell(11).font = dataFont
       if (isEven) row.getCell(11).fill = headerFill(bgFill)
@@ -474,8 +474,8 @@ export const GET = withAuth(async (req: NextRequest) => {
       row.getCell(12).alignment = centerAlign
       if (isEven) row.getCell(12).fill = headerFill(bgFill)
 
-      // M: NETT = GROSS − SELISIH
-      row.getCell(13).value = { formula: `H${r}-K${r}`, result: nett }
+      // M: NETT = Total Payout from Guesty (raw value)
+      row.getCell(13).value = nett
       row.getCell(13).numFmt = idrFmt
       row.getCell(13).font = dataFont
       if (isEven) row.getCell(13).fill = headerFill(bgFill)

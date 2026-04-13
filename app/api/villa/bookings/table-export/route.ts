@@ -84,7 +84,7 @@ function buildIncomeSheet(
   sheetName: string,
   bookings: {
     checkIn: Date; checkOut: Date; guestName: string | null; listing: string;
-    numberOfNights: number | null; source: string; accommodationFare: { toString(): string }
+    numberOfNights: number | null; source: string; accommodationFare: { toString(): string }; totalPayout: { toString(): string }
   }[],
   from: string | null,
   to: string | null,
@@ -187,8 +187,8 @@ function buildIncomeSheet(
 
     const gross   = parseFloat(b.accommodationFare.toString())
     const service = gross * SERVICE_RATE
-    const nett    = gross - service
-    const selisih = 0
+    const nett    = parseFloat(b.totalPayout.toString())   // from Guesty
+    const selisih = gross - service - nett                  // actual delta
     const taxBase = nett / 1.21
     const sc      = taxBase * 0.10
     const pb1     = (taxBase + sc) * 0.10
@@ -230,7 +230,7 @@ function buildIncomeSheet(
     setCell(10, { formula: `H${r}*$J$3`, result: service },                  { numFmt: idrFmt, align: ALIGN_RIGHT })
     setCell(11, { formula: `H${r}-J${r}-M${r}`, result: selisih },           { numFmt: idrFmt, align: ALIGN_RIGHT })
     setCell(12, { formula: `K${r}/H${r}`, result: gross !== 0 ? selisih / gross : 0 }, { numFmt: pctFmt, align: ALIGN_RIGHT })
-    setCell(13, { formula: `H${r}-J${r}`, result: nett },                    { numFmt: idrFmt, align: ALIGN_RIGHT, font: fnt({ bold: true }) })
+    setCell(13, nett,                                                         { numFmt: idrFmt, align: ALIGN_RIGHT, font: fnt({ bold: true }) })
     setCell(14, { formula: `M${r}/1.21`, result: taxBase },                  { numFmt: idrFmt, align: ALIGN_RIGHT })
     setCell(15, { formula: `N${r}*10%`, result: sc },                        { numFmt: idrFmt, align: ALIGN_RIGHT })
     setCell(16, { formula: `(N${r}+O${r})*10%`, result: pb1 },               { numFmt: idrFmt, align: ALIGN_RIGHT, font: FONT_RED })

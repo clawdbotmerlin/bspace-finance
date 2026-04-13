@@ -76,7 +76,7 @@ function fmtPeriod(from: string | null, to: string | null): string {
 function buildIncomeSheet(
   wb: ExcelJS.Workbook,
   listingName: string,
-  bookings: { checkIn: Date; checkOut: Date; guestName: string | null; listing: string; numberOfNights: number | null; source: string; accommodationFare: { toString(): string } }[],
+  bookings: { checkIn: Date; checkOut: Date; guestName: string | null; listing: string; numberOfNights: number | null; source: string; accommodationFare: { toString(): string }; totalPayout: { toString(): string } }[],
   from: string | null,
   to: string | null,
 ): { name: string; totalRow: number; totGross: number; totNett: number; totPB1: number } {
@@ -164,7 +164,7 @@ function buildIncomeSheet(
 
   // Data rows
   const DATA_START = 7
-  let totGross = 0, totSvc = 0, totNett = 0, totPB1 = 0, totOwner = 0
+  let totGross = 0, totSvc = 0, totSelisih = 0, totNett = 0, totPB1 = 0, totOwner = 0
 
   bookings.forEach((b, idx) => {
     const r   = DATA_START + idx
@@ -173,17 +173,19 @@ function buildIncomeSheet(
 
     const gross   = parseFloat(b.accommodationFare.toString())
     const service = gross * SVC_RATE
-    const nett    = gross - service
+    const nett    = parseFloat(b.totalPayout.toString())   // from Guesty
+    const selisih = gross - service - nett                  // actual delta
     const taxBase = nett / 1.21
     const sc      = taxBase * 0.1
     const pb1     = (taxBase + sc) * 0.1
     const owner   = nett - pb1
 
-    totGross  += gross
-    totSvc    += service
-    totNett   += nett
-    totPB1    += pb1
-    totOwner  += owner
+    totGross    += gross
+    totSvc      += service
+    totSelisih  += selisih
+    totNett     += nett
+    totPB1      += pb1
+    totOwner    += owner
 
     const isEven = idx % 2 === 1
     const rowFill = isEven ? fill(ALT) : undefined
@@ -212,9 +214,9 @@ function buildIncomeSheet(
     setCell(8,  gross,  { numFmt: idrFmt, align: ALIGN_R })
     setCell(9,  0,      { numFmt: idrFmt, align: ALIGN_R, font: FONT_BLUE, cellFill: fill('FFFFFACD') })
     setCell(10, { formula: `H${r}*$J$3`, result: service },                  { numFmt: idrFmt, align: ALIGN_R })
-    setCell(11, { formula: `H${r}-J${r}-M${r}`, result: 0 },                 { numFmt: idrFmt, align: ALIGN_R })
-    setCell(12, { formula: `IF(H${r}=0,0,K${r}/H${r})`, result: 0 },         { numFmt: pctFmt, align: ALIGN_R })
-    setCell(13, { formula: `H${r}-J${r}`, result: nett },                    { numFmt: idrFmt, align: ALIGN_R, font: FONT_BOLD })
+    setCell(11, { formula: `H${r}-J${r}-M${r}`, result: selisih },            { numFmt: idrFmt, align: ALIGN_R })
+    setCell(12, { formula: `IF(H${r}=0,0,K${r}/H${r})`, result: gross !== 0 ? selisih / gross : 0 }, { numFmt: pctFmt, align: ALIGN_R })
+    setCell(13, nett,                                                          { numFmt: idrFmt, align: ALIGN_R, font: FONT_BOLD })
     setCell(14, { formula: `M${r}/1.21`, result: taxBase },                  { numFmt: idrFmt, align: ALIGN_R })
     setCell(15, { formula: `N${r}*10%`, result: sc },                        { numFmt: idrFmt, align: ALIGN_R })
     setCell(16, { formula: `(N${r}+O${r})*10%`, result: pb1 },               { numFmt: idrFmt, align: ALIGN_R, font: FONT_RED })
@@ -235,7 +237,7 @@ function buildIncomeSheet(
   const totDefs: { col: number; letter: string; result: number; fillArgb: string; font: Partial<ExcelJS.Font> }[] = [
     { col: 8,  letter: 'H', result: totGross,  fillArgb: 'FFFFFF00', font: FONT_BOLD  },
     { col: 10, letter: 'J', result: totSvc,    fillArgb: DARK,       font: FONT_WHITE },
-    { col: 11, letter: 'K', result: 0,         fillArgb: DARK,       font: FONT_WHITE },
+    { col: 11, letter: 'K', result: totSelisih, fillArgb: DARK,       font: FONT_WHITE },
     { col: 13, letter: 'M', result: totNett,   fillArgb: 'FFFFFF00', font: FONT_BOLD  },
     { col: 16, letter: 'P', result: totPB1,    fillArgb: 'FFFFFF00', font: FONT_RED   },
     { col: 17, letter: 'Q', result: totOwner,  fillArgb: 'FF92D050', font: FONT_BOLD  },
