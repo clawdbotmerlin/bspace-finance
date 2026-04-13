@@ -20,18 +20,6 @@ export interface VillaBookingParseResult {
   errors: string[]
 }
 
-// CSV column indices (0-based):
-// 0  STATUS
-// 1  CHECK-IN
-// 2  CHECK-OUT
-// 3  SOURCE
-// 4  ACCOMMODATION FARE
-// 5  TOTAL PAYOUT
-// 6  LISTING
-// 7  NUMBER OF NIGHTS
-// 8  LISTING ID
-// 9  GUEST'S NAME
-// 10 NUMBER OF GUESTS
 
 function excelSerialToDate(serial: number): string {
   // Excel epoch is Dec 30, 1899 (accounting for the 1900 leap year bug)
@@ -91,6 +79,36 @@ export function fixEncoding(s: string): string {
     .trim()
 }
 
+// Known aliases for each logical field — covers any column order Guesty may export.
+// Keys are normalized (uppercase, trimmed). First match wins.
+const COLUMN_ALIASES: Record<keyof ParsedVillaBooking, string[]> = {
+  status:            ['STATUS'],
+  checkIn:           ['CHECK-IN', 'CHECK IN', 'CHECKIN'],
+  checkOut:          ['CHECK-OUT', 'CHECK OUT', 'CHECKOUT'],
+  source:            ['SOURCE', 'OTA', 'CHANNEL'],
+  accommodationFare: ['ACCOMMODATION FARE', 'ACCOMMODATION', 'FARE', 'ROOM REVENUE'],
+  totalPayout:       ['TOTAL PAYOUT', 'PAYOUT', 'NET PAYOUT'],
+  listing:           ['LISTING', 'LISTING NAME', 'PROPERTY'],
+  listingId:         ['LISTING ID', 'LISTING_ID', 'PROPERTY ID'],
+  guestName:         ["GUEST'S NAME", 'GUEST NAME', 'GUEST', 'NAME'],
+  numberOfNights:    ['NUMBER OF NIGHTS', 'NIGHTS', 'NIGHT'],
+  numberOfGuests:    ['NUMBER OF GUESTS', 'GUESTS', 'GUEST COUNT'],
+}
+
+function buildColumnMap(headerRow: string[]): Map<keyof ParsedVillaBooking, number> {
+  const normalized = headerRow.map(h => String(h).toUpperCase().trim())
+  const colMap = new Map<keyof ParsedVillaBooking, number>()
+
+  for (const [field, aliases] of Object.entries(COLUMN_ALIASES) as [keyof ParsedVillaBooking, string[]][]) {
+    for (const alias of aliases) {
+      const idx = normalized.indexOf(alias)
+      if (idx !== -1) { colMap.set(field, idx); break }
+    }
+  }
+
+  return colMap
+}
+
 export function parseVillaBookingCsv(buffer: ArrayBuffer): VillaBookingParseResult {
   // Decode as UTF-8 string first to preserve Unicode characters (em-dash, accents etc.)
   // then pass to xlsx as a pre-decoded string — avoids the Windows-1252 mojibake bug.
@@ -99,31 +117,50 @@ export function parseVillaBookingCsv(buffer: ArrayBuffer): VillaBookingParseResu
   const ws = wb.Sheets[wb.SheetNames[0]]
   const rows = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' })
 
+  if (rows.length === 0) return { bookings: [], skipped: 0, errors: ['File is empty'] }
+
+  // Build header → index map from row 0 so column order doesn't matter
+  const colMap = buildColumnMap(rows[0])
+
+  const get = (row: string[], field: keyof ParsedVillaBooking): string => {
+    const idx = colMap.get(field)
+    return idx !== undefined ? String(row[idx] ?? '').trim() : ''
+  }
+
+  const missingFields = (Object.keys(COLUMN_ALIASES) as (keyof ParsedVillaBooking)[])
+    .filter(f => !colMap.has(f))
+  if (missingFields.length > 0) {
+    return {
+      bookings: [],
+      skipped: rows.length - 1,
+      errors: [`Missing required columns: ${missingFields.join(', ')}. Headers found: ${rows[0].join(', ')}`],
+    }
+  }
+
   const bookings: ParsedVillaBooking[] = []
   let skipped = 0
   const errors: string[] = []
 
-  // Row 0 is the header row — skip it
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]
-    if (!row || row.length < 9) { skipped++; continue }
+    if (!row || row.every(c => c === '')) { skipped++; continue }
 
-    const status = String(row[0] ?? '').trim()
+    const status = get(row, 'status')
     if (!status) { skipped++; continue }
 
     try {
       bookings.push({
         status,
-        checkIn: parseDate(String(row[1])),
-        checkOut: parseDate(String(row[2])),
-        source: String(row[3] ?? '').trim(),
-        accommodationFare: parseAmount(String(row[4])),
-        totalPayout: parseAmount(String(row[5])),
-        listing: fixEncoding(String(row[6] ?? '')),
-        listingId: String(row[8] ?? '').trim(),
-        guestName: String(row[9] ?? '').trim(),
-        numberOfNights: parseInt(String(row[7] ?? '0'), 10) || 0,
-        numberOfGuests: parseInt(String(row[10] ?? '0'), 10) || 0,
+        checkIn:           parseDate(get(row, 'checkIn')),
+        checkOut:          parseDate(get(row, 'checkOut')),
+        source:            get(row, 'source'),
+        accommodationFare: parseAmount(get(row, 'accommodationFare')),
+        totalPayout:       parseAmount(get(row, 'totalPayout')),
+        listing:           fixEncoding(get(row, 'listing')),
+        listingId:         get(row, 'listingId'),
+        guestName:         get(row, 'guestName'),
+        numberOfNights:    parseInt(get(row, 'numberOfNights') || '0', 10) || 0,
+        numberOfGuests:    parseInt(get(row, 'numberOfGuests') || '0', 10) || 0,
       })
     } catch (err) {
       errors.push(`Row ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
