@@ -187,8 +187,8 @@ function buildIncomeSheet(
 
     const gross   = parseFloat(b.accommodationFare.toString())
     const service = gross * SERVICE_RATE
-    const nett    = parseFloat(b.totalPayout.toString())   // from Guesty
-    const selisih = gross - service - nett                  // actual delta
+    const nett    = parseFloat(b.totalPayout.toString())                  // from Guesty
+    const selisih = Math.max(0, gross - service - nett)                  // clamp to 0 (Booking.com/Trip.com payout differs)
     const taxBase = nett / 1.21
     const sc      = taxBase * 0.10
     const pb1     = (taxBase + sc) * 0.10
@@ -228,7 +228,7 @@ function buildIncomeSheet(
     setCell(8, gross,   { numFmt: idrFmt, align: ALIGN_RIGHT })
     setCell(9, 0,       { numFmt: idrFmt, align: ALIGN_RIGHT, font: FONT_BLUE, cellFill: fill(FILL_YELLOW) })
     setCell(10, { formula: `H${r}*$J$3`, result: service },                  { numFmt: idrFmt, align: ALIGN_RIGHT })
-    setCell(11, { formula: `H${r}-J${r}-M${r}`, result: selisih },           { numFmt: idrFmt, align: ALIGN_RIGHT })
+    setCell(11, { formula: `MAX(0,H${r}-J${r}-M${r})`, result: selisih },    { numFmt: idrFmt, align: ALIGN_RIGHT })
     setCell(12, { formula: `K${r}/H${r}`, result: gross !== 0 ? selisih / gross : 0 }, { numFmt: pctFmt, align: ALIGN_RIGHT })
     setCell(13, nett,                                                         { numFmt: idrFmt, align: ALIGN_RIGHT, font: fnt({ bold: true }) })
     setCell(14, { formula: `M${r}/1.21`, result: taxBase },                  { numFmt: idrFmt, align: ALIGN_RIGHT })

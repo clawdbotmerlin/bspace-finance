@@ -397,8 +397,8 @@ export const GET = withAuth(async (req: NextRequest) => {
       totGross2 += gross
 
       const svc      = gross * SVC_RATE
-      const nett     = parseFloat(b.totalPayout.toString())   // from Guesty
-      const selisih  = gross - svc - nett                      // actual delta
+      const nett     = parseFloat(b.totalPayout.toString())                // from Guesty
+      const selisih  = Math.max(0, gross - svc - nett)                    // clamp to 0 (Booking.com/Trip.com payout differs)
       const tax      = nett / 1.21
       const sc       = tax * 0.1
       const pb1      = (tax + sc) * 0.1
@@ -461,8 +461,8 @@ export const GET = withAuth(async (req: NextRequest) => {
       row.getCell(10).font = dataFont
       if (isEven) row.getCell(10).fill = headerFill(bgFill)
 
-      // K: SELISIH & DISC = GROSS − SERVICE − NETT (actual delta)
-      row.getCell(11).value = { formula: `H${r}-J${r}-M${r}`, result: selisih }
+      // K: SELISIH & DISC = MAX(0, GROSS − SERVICE − NETT) — clamped, never negative
+      row.getCell(11).value = { formula: `MAX(0,H${r}-J${r}-M${r})`, result: selisih }
       row.getCell(11).numFmt = idrFmt
       row.getCell(11).font = dataFont
       if (isEven) row.getCell(11).fill = headerFill(bgFill)
