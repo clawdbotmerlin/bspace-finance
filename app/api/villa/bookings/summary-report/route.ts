@@ -293,98 +293,113 @@ export const GET = withAuth(async (req: NextRequest) => {
     const sheetName = safeName(listingName)
     const ws2 = wb.addWorksheet(sheetName)
 
-    // Column widths: A spacer | B date | C name | D listing | E stay | F night | G ota |
-    //                H gross | I disc | J service | K selisih | L % | M nett | N tax | O sc | P pb1 | Q owner
-    const cw = [3, 13, 22, 28, 22, 7, 14, 14, 12, 12, 12, 7, 14, 12, 10, 12, 14]
+    // 20-column layout: A spacer | B DATE BOOKING | C NAME | D ROOM | E DATE STAY | F NIGHT | G OTA
+    //   H REVENUE GROSS | I DISC | J FEE OTA | K TAX | L ALL REDUCTION
+    //   M REVENUE NETT | N REVENUE | O /NIGHT | P TAX | Q SC | R PB1 | S NETT AFTER PB1 | T /NIGHT
+    const cw = [3, 12, 20, 10, 20, 7, 10, 14, 10, 12, 12, 14, 14, 14, 10, 12, 10, 12, 16, 10]
     cw.forEach((w, i) => { ws2.getColumn(i + 1).width = w })
 
     // ── Row 1: Brand + listing title
-    ws2.mergeCells('B1:Q1')
-    const t1 = ws2.getCell('B1')
+    ws2.mergeCells('A1:T1')
+    const t1 = ws2.getCell('A1')
     t1.value = `BSpace Finance — ${listingName}`
     t1.font = { bold: true, size: 13, name: 'Arial', color: { argb: 'FF1E3A5F' } }
     t1.alignment = { horizontal: 'left', vertical: 'middle' }
     ws2.getRow(1).height = 22
 
     // ── Row 2: Period
-    ws2.mergeCells('B2:Q2')
-    const t2 = ws2.getCell('B2')
-    t2.value = `Periode: ${fmtPeriod(from, to)}`
+    ws2.mergeCells('A2:T2')
+    const t2 = ws2.getCell('A2')
+    t2.value = `Periode: ${fmtPeriod(from, to)}   |   ${listingBookings.length} booking`
     t2.font = { size: 10, name: 'Arial', color: { argb: 'FF555555' } }
     ws2.getRow(2).height = 14
 
-    // ── Row 3: blank
-    ws2.getRow(3).height = 6
+    // ── Row 3: Service rate ($J$3 referenced in FEE OTA formula)
+    ws2.getCell('I3').value = 'SERVICE RATE'
+    ws2.getCell('I3').font = { size: 9, bold: true, name: 'Arial' }
+    ws2.getCell('J3').value = SVC_RATE
+    ws2.getCell('J3').numFmt = pctFmt
+    ws2.getCell('J3').font = { size: 9, color: { argb: 'FF0000FF' }, name: 'Arial' }
+    ws2.getRow(3).height = 13
+    const SVC_REF = '$J$3'
 
-    // ── Row 4: Service rate assumption
-    ws2.getCell('B4').value = 'Service Rate (OTA)'
-    ws2.getCell('B4').font = { size: 9, bold: true, name: 'Arial' }
-    ws2.getCell('C4').value = SVC_RATE
-    ws2.getCell('C4').numFmt = pctFmt
-    ws2.getCell('C4').font = { size: 9, color: { argb: 'FF0000FF' }, name: 'Arial' }
-    ws2.getRow(4).height = 13
+    // ── Row 4: blank
+    ws2.getRow(4).height = 6
 
-    const SVC_REF = '$C$4'
+    // ── Rows 5–6: Two-row header
+    const grayInputCols2 = ['B', 'C', 'D', 'F', 'G', 'H']
+    const mergedCols2 = ['B', 'C', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T']
+    for (const col of mergedCols2) ws2.mergeCells(`${col}5:${col}6`)
 
-    // ── Row 5: blank
-    ws2.getRow(5).height = 6
-
-    // ── Row 6–7: Two-row header
-    // Revenue group header spanning H–M (cols 8–13)
-    ws2.mergeCells('H6:M6')
-    ws2.getCell('H6').value = 'Revenue'
-    ws2.getCell('H6').font = headerFont
-    ws2.getCell('H6').fill = headerFill('FF2E4F6F')
-    ws2.getCell('H6').alignment = centerAlign
-
-    // Fixed single-row headers (merged across both rows 6–7)
-    const fixedH2: { cell: string; value: string; fillArgb: string }[] = [
-      { cell: 'B6', value: 'DATE BOOKING', fillArgb: 'FF1E3A5F' },
-      { cell: 'C6', value: 'NAME',         fillArgb: 'FF1E3A5F' },
-      { cell: 'D6', value: 'LISTING',      fillArgb: 'FF1E3A5F' },
-      { cell: 'E6', value: 'DATE STAY',    fillArgb: 'FF1E3A5F' },
-      { cell: 'F6', value: 'NIGHT',        fillArgb: 'FF1E3A5F' },
-      { cell: 'G6', value: 'OTA',          fillArgb: 'FF1E3A5F' },
-      { cell: 'N6', value: 'TAX',          fillArgb: 'FF1E3A5F' },
-      { cell: 'O6', value: 'SC',           fillArgb: 'FF1E3A5F' },
-      { cell: 'P6', value: 'PB1',          fillArgb: 'FF1E3A5F' },
-      { cell: 'Q6', value: 'REVENUE OWNER', fillArgb: 'FF1E6B3A' },
+    const HEADERS2: { col: string; label: string }[] = [
+      { col: 'B', label: 'DATE\nBOOKING'    },
+      { col: 'C', label: 'NAME'             },
+      { col: 'D', label: 'ROOM'             },
+      { col: 'E', label: 'DATE STAY'        },
+      { col: 'F', label: 'NIGHT'            },
+      { col: 'G', label: 'OTA'              },
+      { col: 'H', label: 'REVENUE\nGROSS'  },
+      { col: 'I', label: 'DISC'             },
+      { col: 'J', label: 'FEE OTA'          },
+      { col: 'K', label: 'TAX'              },
+      { col: 'L', label: 'ALL\nREDUCTION'  },
+      { col: 'M', label: 'REVENUE\nNETT'   },
+      { col: 'N', label: 'REVENUE'          },
+      { col: 'O', label: '/ NIGHT'          },
+      { col: 'P', label: 'TAX'              },
+      { col: 'Q', label: 'SC'               },
+      { col: 'R', label: 'PB1'              },
+      { col: 'S', label: 'NETT\nAFTER PB1' },
+      { col: 'T', label: '/ NIGHT'          },
     ]
-    const mergeCols = ['B', 'C', 'D', 'E', 'F', 'G', 'N', 'O', 'P', 'Q']
-    for (const col of mergeCols) {
-      ws2.mergeCells(`${col}6:${col}7`)
-    }
-    for (const { cell, value, fillArgb } of fixedH2) {
-      ws2.getCell(cell).value = value
-      ws2.getCell(cell).font = headerFont
-      ws2.getCell(cell).fill = headerFill(fillArgb)
-      ws2.getCell(cell).alignment = centerAlign
-    }
 
-    // Revenue sub-headers (row 7)
-    const subH2: { cell: string; value: string; fillArgb: string }[] = [
-      { cell: 'H7', value: 'GROSS',         fillArgb: 'FF2E4F6F' },
-      { cell: 'I7', value: 'DISCOUNT',      fillArgb: 'FFB8860B' },  // amber = manual
-      { cell: 'J7', value: 'SERVICE',       fillArgb: 'FF2E4F6F' },
-      { cell: 'K7', value: 'SELISIH & DISC', fillArgb: 'FF2E4F6F' },
-      { cell: 'L7', value: '%',             fillArgb: 'FF2E4F6F' },
-      { cell: 'M7', value: 'NETT',          fillArgb: 'FF2E4F6F' },
-    ]
-    for (const { cell, value, fillArgb } of subH2) {
-      ws2.getCell(cell).value = value
-      ws2.getCell(cell).font = headerFont
-      ws2.getCell(cell).fill = headerFill(fillArgb)
-      ws2.getCell(cell).alignment = centerAlign
+    ws2.getRow(5).height = 28
+    ws2.getRow(6).height = 14
+
+    const whiteBorder2: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+      bottom: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+      left: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+      right: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+    }
+    const hairBorder2: Partial<ExcelJS.Borders> = {
+      top: { style: 'hair', color: { argb: 'FFD0D5DD' } },
+      bottom: { style: 'hair', color: { argb: 'FFD0D5DD' } },
+      left: { style: 'hair', color: { argb: 'FFD0D5DD' } },
+      right: { style: 'hair', color: { argb: 'FFD0D5DD' } },
     }
 
-    ws2.getRow(6).height = 16
-    ws2.getRow(7).height = 14
+    for (const { col, label } of HEADERS2) {
+      const isGray = grayInputCols2.includes(col)
+      const cell = ws2.getCell(`${col}5`)
+      cell.value = label
+      cell.fill = headerFill(isGray ? 'FFD0CECE' : 'FF1E3A5F')
+      cell.font = isGray
+        ? { bold: true, size: 9, name: 'Arial' }
+        : col === 'R'
+          ? { bold: true, size: 9, name: 'Arial', color: { argb: 'FFFF0000' } }
+          : headerFont
+      cell.alignment = { ...centerAlign, wrapText: true }
+      cell.border = whiteBorder2
+    }
 
-    // ── Data rows starting at row 8
-    const D2 = 8
-    let totGross2 = 0
-    let totNett2  = 0
-    let totPB12   = 0
+    // Row 6 sub-labels (E and J only)
+    for (const { col, label } of [
+      { col: 'E', label: 'Booking'                           },
+      { col: 'J', label: `${(SVC_RATE * 100).toFixed(0)}%`  },
+    ]) {
+      const cell = ws2.getCell(`${col}6`)
+      cell.value = label
+      cell.fill = headerFill('FF1E3A5F')
+      cell.font = headerFont
+      cell.alignment = centerAlign
+      cell.border = whiteBorder2
+    }
+
+    // ── Data rows starting at row 7
+    const D2 = 7
+    let totGross2 = 0, totFeeOTA2 = 0, totTax2 = 0, totAllRed2 = 0
+    let totNett2 = 0, totTaxBase2 = 0, totSC2 = 0, totPB12 = 0, totNettPB12 = 0
 
     listingBookings.forEach((b, idx) => {
       const r = D2 + idx
@@ -392,127 +407,71 @@ export const GET = withAuth(async (req: NextRequest) => {
       row.height = 14
 
       const isEven = idx % 2 === 1
-      const bgFill = isEven ? 'FFF5F7FA' : 'FFFFFFFF'
-      const gross = parseFloat(b.accommodationFare.toString())
-      totGross2 += gross
+      const bgArgb = isEven ? 'FFF5F7FA' : 'FFFFFFFF'
 
-      const svc      = gross * SVC_RATE
-      const nett     = parseFloat(b.totalPayout.toString())                // from Guesty
-      const selisih  = Math.max(0, gross - svc - nett)                    // clamp to 0 (Booking.com/Trip.com payout differs)
-      const tax      = nett / 1.21
-      const sc       = tax * 0.1
-      const pb1      = (tax + sc) * 0.1
-      const owner    = nett - pb1
-      totNett2  += nett
-      totPB12   += pb1
+      const gross     = parseFloat(b.accommodationFare.toString())
+      const revNett   = parseFloat(b.totalPayout.toString())           // M: REVENUE NETT from Guesty
+      const feeOTA    = gross * SVC_RATE                                // J: 3%
+      const taxSel    = Math.max(0, gross - feeOTA - revNett)          // K: MAX(0, delta)
+      const allRed    = feeOTA + taxSel                                 // L
+      const nights    = b.numberOfNights ?? 0
+      const taxBase   = revNett / 1.21                                  // P
+      const sc        = taxBase * 0.10                                  // Q
+      const pb1       = (taxBase + sc) * 0.10                          // R
+      const nettPB1   = revNett - pb1                                   // S
+      const perNight1 = nights > 0 ? revNett / nights : 0              // O
+      const perNight2 = nights > 0 ? nettPB1 / nights : 0              // T
+
+      totGross2   += gross
+      totFeeOTA2  += feeOTA
+      totTax2     += taxSel
+      totAllRed2  += allRed
+      totNett2    += revNett
+      totTaxBase2 += taxBase
+      totSC2      += sc
+      totPB12     += pb1
+      totNettPB12 += nettPB1
 
       const checkInStr  = fmtDate(new Date(b.checkIn))
       const checkOutStr = fmtDate(new Date(b.checkOut))
+      const roomCode    = fixEncoding(b.listing).split(' / ')[0].trim()
 
-      // B: DATE BOOKING
-      row.getCell(2).value = checkInStr
-      row.getCell(2).font = dataFont
-      row.getCell(2).alignment = centerAlign
-      if (isEven) row.getCell(2).fill = headerFill(bgFill)
-
-      // C: NAME
-      row.getCell(3).value = b.guestName ?? ''
-      row.getCell(3).font = dataFont
-      if (isEven) row.getCell(3).fill = headerFill(bgFill)
-
-      // D: LISTING
-      row.getCell(4).value = listingName
-      row.getCell(4).font = dataFont
-      if (isEven) row.getCell(4).fill = headerFill(bgFill)
-
-      // E: DATE STAY (checkIn – checkOut)
-      row.getCell(5).value = `${checkInStr} — ${checkOutStr}`
-      row.getCell(5).font = dataFont
-      row.getCell(5).alignment = centerAlign
-      if (isEven) row.getCell(5).fill = headerFill(bgFill)
-
-      // F: NIGHT
-      row.getCell(6).value = b.numberOfNights ?? 0
-      row.getCell(6).font = dataFont
-      row.getCell(6).alignment = centerAlign
-      if (isEven) row.getCell(6).fill = headerFill(bgFill)
-
-      // G: OTA (source)
-      row.getCell(7).value = b.source ?? ''
-      row.getCell(7).font = dataFont
-      row.getCell(7).alignment = centerAlign
-      if (isEven) row.getCell(7).fill = headerFill(bgFill)
-
-      // H: GROSS
-      row.getCell(8).value = gross
-      row.getCell(8).numFmt = idrFmt
-      row.getCell(8).font = dataFont
-      if (isEven) row.getCell(8).fill = headerFill(bgFill)
-
-      // I: DISCOUNT (blank/manual)
-      row.getCell(9).value = null
-      row.getCell(9).numFmt = idrFmt
-      row.getCell(9).fill = headerFill('FFFFFACD')
-      row.getCell(9).font = { size: 9, color: { argb: 'FF0000FF' }, name: 'Arial' }
-
-      // J: SERVICE = GROSS × rate
-      row.getCell(10).value = { formula: `H${r}*${SVC_REF}`, result: svc }
-      row.getCell(10).numFmt = idrFmt
-      row.getCell(10).font = dataFont
-      if (isEven) row.getCell(10).fill = headerFill(bgFill)
-
-      // K: SELISIH & DISC = MAX(0, GROSS − SERVICE − NETT) — clamped, never negative
-      row.getCell(11).value = { formula: `MAX(0,H${r}-J${r}-M${r})`, result: selisih }
-      row.getCell(11).numFmt = idrFmt
-      row.getCell(11).font = dataFont
-      if (isEven) row.getCell(11).fill = headerFill(bgFill)
-
-      // L: % = SELISIH / GROSS
-      row.getCell(12).value = { formula: `IF(H${r}=0,0,K${r}/H${r})`, result: gross > 0 ? selisih / gross : 0 }
-      row.getCell(12).numFmt = pctFmt
-      row.getCell(12).font = dataFont
-      row.getCell(12).alignment = centerAlign
-      if (isEven) row.getCell(12).fill = headerFill(bgFill)
-
-      // M: NETT = Total Payout from Guesty (raw value)
-      row.getCell(13).value = nett
-      row.getCell(13).numFmt = idrFmt
-      row.getCell(13).font = dataFont
-      if (isEven) row.getCell(13).fill = headerFill(bgFill)
-
-      // N: TAX = NETT / 1.21
-      row.getCell(14).value = { formula: `M${r}/1.21`, result: tax }
-      row.getCell(14).numFmt = idrFmt
-      row.getCell(14).font = dataFont
-      if (isEven) row.getCell(14).fill = headerFill(bgFill)
-
-      // O: SC = TAX × 10%
-      row.getCell(15).value = { formula: `N${r}*0.1`, result: sc }
-      row.getCell(15).numFmt = idrFmt
-      row.getCell(15).font = dataFont
-      if (isEven) row.getCell(15).fill = headerFill(bgFill)
-
-      // P: PB1 = (TAX + SC) × 10%
-      row.getCell(16).value = { formula: `(N${r}+O${r})*0.1`, result: pb1 }
-      row.getCell(16).numFmt = idrFmt
-      row.getCell(16).font = { ...dataFont, color: { argb: 'FFCC0000' } }
-      if (isEven) row.getCell(16).fill = headerFill(bgFill)
-
-      // Q: REVENUE OWNER = NETT − PB1
-      row.getCell(17).value = { formula: `M${r}-P${r}`, result: owner }
-      row.getCell(17).numFmt = idrFmt
-      row.getCell(17).font = { ...dataFont, bold: true }
-      row.getCell(17).fill = headerFill(isEven ? 'FFD4EDDA' : 'FFE8F5E9')
-
-      // Borders
-      for (let c = 2; c <= 17; c++) {
-        row.getCell(c).border = {
-          top: { style: 'hair', color: { argb: 'FFD0D5DD' } },
-          bottom: { style: 'hair', color: { argb: 'FFD0D5DD' } },
-          left: { style: 'hair', color: { argb: 'FFD0D5DD' } },
-          right: { style: 'hair', color: { argb: 'FFD0D5DD' } },
-        }
+      const setCell2 = (col: number, value: ExcelJS.CellValue, opts: {
+        numFmt?: string; align?: Partial<ExcelJS.Alignment>; font?: Partial<ExcelJS.Font>; forceArgb?: string
+      } = {}) => {
+        const cell = row.getCell(col)
+        cell.value = value
+        cell.font = opts.font ?? dataFont
+        if (opts.numFmt) cell.numFmt = opts.numFmt
+        if (opts.align) cell.alignment = opts.align
+        cell.fill = opts.forceArgb
+          ? headerFill(opts.forceArgb)
+          : isEven ? headerFill(bgArgb) : { type: 'pattern', pattern: 'none' } as ExcelJS.Fill
+        cell.border = hairBorder2
       }
+
+      row.getCell(1).fill = isEven ? headerFill(bgArgb) : { type: 'pattern', pattern: 'none' } as ExcelJS.Fill
+      row.getCell(1).border = hairBorder2
+
+      setCell2(2,  checkInStr, { align: centerAlign })                                                              // B: DATE BOOKING
+      setCell2(3,  b.guestName ?? '')                                                                               // C: NAME
+      setCell2(4,  roomCode)                                                                                        // D: ROOM
+      setCell2(5,  `${checkInStr} — ${checkOutStr}`, { align: centerAlign })                                       // E: DATE STAY
+      setCell2(6,  nights, { align: centerAlign })                                                                  // F: NIGHT
+      setCell2(7,  b.source ?? '', { align: centerAlign })                                                          // G: OTA
+      setCell2(8,  gross, { numFmt: idrFmt, align: rightAlign })                                                    // H: REVENUE GROSS
+      setCell2(9,  0, { numFmt: idrFmt, align: rightAlign, font: { size: 9, color: { argb: 'FF0000FF' }, name: 'Arial' }, forceArgb: 'FFFFFACD' }) // I: DISC (manual)
+      setCell2(10, { formula: `H${r}*${SVC_REF}`, result: feeOTA }, { numFmt: idrFmt, align: rightAlign })        // J: FEE OTA
+      setCell2(11, { formula: `MAX(0,H${r}-J${r}-M${r})`, result: taxSel }, { numFmt: idrFmt, align: rightAlign }) // K: TAX
+      setCell2(12, { formula: `I${r}+J${r}+K${r}`, result: allRed }, { numFmt: idrFmt, align: rightAlign })       // L: ALL REDUCTION
+      setCell2(13, revNett, { numFmt: idrFmt, align: rightAlign, font: boldFont })                                  // M: REVENUE NETT
+      setCell2(14, { formula: `M${r}`, result: revNett }, { numFmt: idrFmt, align: rightAlign })                   // N: REVENUE
+      setCell2(15, { formula: `IF(F${r}=0,0,N${r}/F${r})`, result: perNight1 }, { numFmt: idrFmt, align: rightAlign }) // O: /NIGHT
+      setCell2(16, { formula: `M${r}/1.21`, result: taxBase }, { numFmt: idrFmt, align: rightAlign })              // P: TAX
+      setCell2(17, { formula: `P${r}*10%`, result: sc }, { numFmt: idrFmt, align: rightAlign })                    // Q: SC
+      setCell2(18, { formula: `(P${r}+Q${r})*10%`, result: pb1 }, { numFmt: idrFmt, align: rightAlign, font: { bold: true, size: 9, name: 'Arial', color: { argb: 'FFFF0000' } } }) // R: PB1
+      setCell2(19, { formula: `M${r}-R${r}`, result: nettPB1 }, { numFmt: idrFmt, align: rightAlign, font: boldFont })  // S: NETT AFTER PB1
+      setCell2(20, { formula: `IF(F${r}=0,0,S${r}/F${r})`, result: perNight2 }, { numFmt: idrFmt, align: rightAlign })  // T: /NIGHT
     })
 
     // ── Total row
@@ -520,50 +479,48 @@ export const GET = withAuth(async (req: NextRequest) => {
     const tr2 = ws2.getRow(totRow2)
     tr2.height = 17
 
-    ws2.mergeCells(`B${totRow2}:G${totRow2}`)
-    tr2.getCell(2).value = `TOTAL (${listingBookings.length} Booking)`
-    tr2.getCell(2).font = { ...boldFont, color: { argb: 'FFFFFFFF' } }
-    tr2.getCell(2).fill = headerFill('FF1E3A5F')
-    tr2.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' }
+    ws2.mergeCells(`A${totRow2}:G${totRow2}`)
+    tr2.getCell(1).value = `TOTAL (${listingBookings.length} Booking)`
+    tr2.getCell(1).font = { ...boldFont, color: { argb: 'FFFFFFFF' } }
+    tr2.getCell(1).fill = headerFill('FF1E3A5F')
+    tr2.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' }
 
-    const totSvc    = totGross2 * SVC_RATE
-    const totOwner2 = totNett2 - totPB12
-
-    const totDefs: { col: number; letter: string; result: number; fillArgb: string }[] = [
-      { col: 8,  letter: 'H', result: totGross2,        fillArgb: 'FFFFCC00' },
-      { col: 9,  letter: 'I', result: 0,                fillArgb: 'FF9B7D00' },
-      { col: 10, letter: 'J', result: totSvc,           fillArgb: 'FF1E3A5F' },
-      { col: 11, letter: 'K', result: totSvc,           fillArgb: 'FF1E3A5F' },
-      { col: 12, letter: 'L', result: 0,                fillArgb: 'FF1E3A5F' }, // % — leave blank in total
-      { col: 13, letter: 'M', result: totNett2,         fillArgb: 'FFFFCC00' },
-      { col: 14, letter: 'N', result: totNett2 / 1.21,  fillArgb: 'FF1E3A5F' },
-      { col: 15, letter: 'O', result: totNett2 / 1.21 * 0.1, fillArgb: 'FF1E3A5F' },
-      { col: 16, letter: 'P', result: totPB12,          fillArgb: 'FF1E3A5F' },
-      { col: 17, letter: 'Q', result: totOwner2,        fillArgb: 'FF1E6B3A' },
+    const totDefs2: { col: number; letter: string; result: number; fillArgb: string; blank?: boolean }[] = [
+      { col: 8,  letter: 'H', result: totGross2,    fillArgb: 'FFFFCC00' },
+      { col: 9,  letter: 'I', result: 0,            fillArgb: 'FF1E3A5F' },
+      { col: 10, letter: 'J', result: totFeeOTA2,   fillArgb: 'FF1E3A5F' },
+      { col: 11, letter: 'K', result: totTax2,      fillArgb: 'FF1E3A5F' },
+      { col: 12, letter: 'L', result: totAllRed2,   fillArgb: 'FF1E3A5F' },
+      { col: 13, letter: 'M', result: totNett2,     fillArgb: 'FFFFCC00' },
+      { col: 14, letter: 'N', result: totNett2,     fillArgb: 'FFFFCC00' },
+      { col: 15, letter: 'O', result: 0, blank: true, fillArgb: 'FF1E3A5F' },
+      { col: 16, letter: 'P', result: totTaxBase2,  fillArgb: 'FF1E3A5F' },
+      { col: 17, letter: 'Q', result: totSC2,       fillArgb: 'FF1E3A5F' },
+      { col: 18, letter: 'R', result: totPB12,      fillArgb: 'FF1E3A5F' },
+      { col: 19, letter: 'S', result: totNettPB12,  fillArgb: 'FF1E6B3A' },
+      { col: 20, letter: 'T', result: 0, blank: true, fillArgb: 'FF1E3A5F' },
     ]
 
-    for (const { col, letter, result, fillArgb } of totDefs) {
-      const cell = tr2.getCell(col)
-      if (letter === 'L') {
-        // percentage total — blank
-        cell.value = null
-      } else if (letter === 'I') {
-        cell.value = { formula: `SUM(${letter}${D2}:${letter}${totRow2 - 1})`, result: 0 }
-      } else {
-        cell.value = { formula: `SUM(${letter}${D2}:${letter}${totRow2 - 1})`, result }
-      }
-      cell.numFmt = letter === 'L' ? pctFmt : idrFmt
-      cell.font = col === 8 || col === 13
-        ? { ...boldFont }
-        : { ...boldFont, color: { argb: 'FFFFFFFF' } }
-      cell.fill = headerFill(fillArgb)
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FFAAAAAA' } },
-        bottom: { style: 'thin', color: { argb: 'FFAAAAAA' } },
+    const allTotCols2 = new Set(totDefs2.map(d => d.col))
+    for (let c = 2; c <= 20; c++) {
+      if (!allTotCols2.has(c)) {
+        tr2.getCell(c).fill = headerFill('FF1E3A5F')
+        tr2.getCell(c).border = { top: { style: 'thin', color: { argb: 'FFAAAAAA' } }, bottom: { style: 'thin', color: { argb: 'FFAAAAAA' } } }
       }
     }
+    for (const { col, letter, result, fillArgb, blank } of totDefs2) {
+      const cell = tr2.getCell(col)
+      cell.value = blank ? null : { formula: `SUM(${letter}${D2}:${letter}${totRow2 - 1})`, result }
+      cell.numFmt = idrFmt
+      cell.font = (col === 8 || col === 13 || col === 14 || col === 19)
+        ? boldFont
+        : { ...boldFont, color: { argb: 'FFFFFFFF' } }
+      cell.fill = headerFill(fillArgb)
+      cell.alignment = rightAlign
+      cell.border = { top: { style: 'thin', color: { argb: 'FFAAAAAA' } }, bottom: { style: 'thin', color: { argb: 'FFAAAAAA' } } }
+    }
 
-    ws2.views = [{ state: 'frozen', ySplit: 7 }]
+    ws2.views = [{ state: 'frozen', ySplit: 6 }]
   }
 
   // Force Excel to recalculate all formulas on open
