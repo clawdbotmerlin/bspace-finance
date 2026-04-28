@@ -193,8 +193,8 @@ function buildIncomeSheet(
     const row   = ws.getRow(r)
     row.height  = 15
 
-    const gross     = parseFloat(b.accommodationFare.toString())
     const revNett   = parseFloat(b.totalPayout.toString())          // M: REVENUE NETT from Guesty
+    const gross     = Math.max(parseFloat(b.accommodationFare.toString()), revNett) // H: GROSS always ≥ NETT
     const feeOTA   = gross * SERVICE_RATE                            // J: 3%
     const taxSel   = Math.max(0, gross - feeOTA - revNett)          // K: MAX(0, delta)
     const allRed   = feeOTA + taxSel                                 // L: (DISC handled via formula)

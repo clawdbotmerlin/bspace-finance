@@ -67,9 +67,10 @@ export const GET = withAuth(async (req: NextRequest) => {
     const listingKey = fixEncoding(b.listing)
     if (!grouped.has(listingKey)) grouped.set(listingKey, { gross: 0, nett: 0, count: 0 })
     const g = grouped.get(listingKey)!
-    const gross = parseFloat(b.accommodationFare.toString())
+    const nettRaw = parseFloat(b.totalPayout.toString())
+    const gross   = Math.max(parseFloat(b.accommodationFare.toString()), nettRaw) // GROSS always ≥ NETT
     g.gross += gross
-    g.nett  += parseFloat(b.totalPayout.toString())   // from Guesty
+    g.nett  += nettRaw
     g.count++
   }
 
@@ -409,8 +410,8 @@ export const GET = withAuth(async (req: NextRequest) => {
       const isEven = idx % 2 === 1
       const bgArgb = isEven ? 'FFF5F7FA' : 'FFFFFFFF'
 
-      const gross     = parseFloat(b.accommodationFare.toString())
       const revNett   = parseFloat(b.totalPayout.toString())           // M: REVENUE NETT from Guesty
+      const gross     = Math.max(parseFloat(b.accommodationFare.toString()), revNett) // H: GROSS always ≥ NETT
       const feeOTA    = gross * SVC_RATE                                // J: 3%
       const taxSel    = Math.max(0, gross - feeOTA - revNett)          // K: MAX(0, delta)
       const allRed    = feeOTA + taxSel                                 // L
