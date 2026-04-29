@@ -294,14 +294,14 @@ export const GET = withAuth(async (req: NextRequest) => {
     const sheetName = safeName(listingName)
     const ws2 = wb.addWorksheet(sheetName)
 
-    // 20-column layout: A spacer | B DATE BOOKING | C NAME | D ROOM | E DATE STAY | F NIGHT | G OTA
-    //   H REVENUE GROSS | I DISC | J FEE OTA | K TAX | L ALL REDUCTION
-    //   M REVENUE NETT | N REVENUE | O /NIGHT | P TAX | Q SC | R PB1 | S NETT AFTER PB1 | T /NIGHT
-    const cw = [3, 12, 20, 10, 20, 7, 10, 14, 10, 12, 12, 14, 14, 14, 10, 12, 10, 12, 16, 10]
+    // 21-column layout: A spacer | B DATE BOOKING | C NAME | D ROOM | E DATE STAY | F NIGHT | G OTA
+    //   H REVENUE GROSS | I ACCOMM FARE | J DISC | K FEE OTA | L TAX | M ALL REDUCTION
+    //   N REVENUE NETT | O REVENUE | P /NIGHT | Q TAX | R SC | S PB1 | T NETT AFTER PB1 | U /NIGHT
+    const cw = [3, 12, 20, 10, 20, 7, 10, 14, 14, 10, 12, 12, 14, 14, 14, 10, 12, 10, 12, 16, 10]
     cw.forEach((w, i) => { ws2.getColumn(i + 1).width = w })
 
     // ── Row 1: Brand + listing title
-    ws2.mergeCells('A1:T1')
+    ws2.mergeCells('A1:U1')
     const t1 = ws2.getCell('A1')
     t1.value = `BSpace Finance — ${listingName}`
     t1.font = { bold: true, size: 13, name: 'Arial', color: { argb: 'FF1E3A5F' } }
@@ -309,27 +309,27 @@ export const GET = withAuth(async (req: NextRequest) => {
     ws2.getRow(1).height = 22
 
     // ── Row 2: Period
-    ws2.mergeCells('A2:T2')
+    ws2.mergeCells('A2:U2')
     const t2 = ws2.getCell('A2')
     t2.value = `Periode: ${fmtPeriod(from, to)}   |   ${listingBookings.length} booking`
     t2.font = { size: 10, name: 'Arial', color: { argb: 'FF555555' } }
     ws2.getRow(2).height = 14
 
-    // ── Row 3: Service rate ($J$3 referenced in FEE OTA formula)
-    ws2.getCell('I3').value = 'SERVICE RATE'
-    ws2.getCell('I3').font = { size: 9, bold: true, name: 'Arial' }
-    ws2.getCell('J3').value = SVC_RATE
-    ws2.getCell('J3').numFmt = pctFmt
-    ws2.getCell('J3').font = { size: 9, color: { argb: 'FF0000FF' }, name: 'Arial' }
+    // ── Row 3: Service rate ($K$3 referenced in FEE OTA formula)
+    ws2.getCell('J3').value = 'SERVICE RATE'
+    ws2.getCell('J3').font = { size: 9, bold: true, name: 'Arial' }
+    ws2.getCell('K3').value = SVC_RATE
+    ws2.getCell('K3').numFmt = pctFmt
+    ws2.getCell('K3').font = { size: 9, color: { argb: 'FF0000FF' }, name: 'Arial' }
     ws2.getRow(3).height = 13
-    const SVC_REF = '$J$3'
+    const SVC_REF = '$K$3'
 
     // ── Row 4: blank
     ws2.getRow(4).height = 6
 
-    // ── Rows 5–6: Two-row header
-    const grayInputCols2 = ['B', 'C', 'D', 'F', 'G', 'H']
-    const mergedCols2 = ['B', 'C', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T']
+    // ── Rows 5–6: Two-row header; E and K have sub-labels in row 6
+    const grayInputCols2 = ['B', 'C', 'D', 'F', 'G', 'H', 'I']  // I = ACCOMM FARE (raw input)
+    const mergedCols2 = ['B', 'C', 'D', 'F', 'G', 'H', 'I', 'J', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U']
     for (const col of mergedCols2) ws2.mergeCells(`${col}5:${col}6`)
 
     const HEADERS2: { col: string; label: string }[] = [
@@ -340,18 +340,19 @@ export const GET = withAuth(async (req: NextRequest) => {
       { col: 'F', label: 'NIGHT'            },
       { col: 'G', label: 'OTA'              },
       { col: 'H', label: 'REVENUE\nGROSS'  },
-      { col: 'I', label: 'DISC'             },
-      { col: 'J', label: 'FEE OTA'          },
-      { col: 'K', label: 'TAX'              },
-      { col: 'L', label: 'ALL\nREDUCTION'  },
-      { col: 'M', label: 'REVENUE\nNETT'   },
-      { col: 'N', label: 'REVENUE'          },
-      { col: 'O', label: '/ NIGHT'          },
-      { col: 'P', label: 'TAX'              },
-      { col: 'Q', label: 'SC'               },
-      { col: 'R', label: 'PB1'              },
-      { col: 'S', label: 'NETT\nAFTER PB1' },
-      { col: 'T', label: '/ NIGHT'          },
+      { col: 'I', label: 'ACCOMM\nFARE'    },
+      { col: 'J', label: 'DISC'             },
+      { col: 'K', label: 'FEE OTA'          },
+      { col: 'L', label: 'TAX'              },
+      { col: 'M', label: 'ALL\nREDUCTION'  },
+      { col: 'N', label: 'REVENUE\nNETT'   },
+      { col: 'O', label: 'REVENUE'          },
+      { col: 'P', label: '/ NIGHT'          },
+      { col: 'Q', label: 'TAX'              },
+      { col: 'R', label: 'SC'               },
+      { col: 'S', label: 'PB1'              },
+      { col: 'T', label: 'NETT\nAFTER PB1' },
+      { col: 'U', label: '/ NIGHT'          },
     ]
 
     ws2.getRow(5).height = 28
@@ -377,17 +378,17 @@ export const GET = withAuth(async (req: NextRequest) => {
       cell.fill = headerFill(isGray ? 'FFD0CECE' : 'FF1E3A5F')
       cell.font = isGray
         ? { bold: true, size: 9, name: 'Arial' }
-        : col === 'R'
+        : col === 'S'
           ? { bold: true, size: 9, name: 'Arial', color: { argb: 'FFFF0000' } }
           : headerFont
       cell.alignment = { ...centerAlign, wrapText: true }
       cell.border = whiteBorder2
     }
 
-    // Row 6 sub-labels (E and J only)
+    // Row 6 sub-labels (E = date sub, K = service rate %)
     for (const { col, label } of [
       { col: 'E', label: 'Booking'                           },
-      { col: 'J', label: `${(SVC_RATE * 100).toFixed(0)}%`  },
+      { col: 'K', label: `${(SVC_RATE * 100).toFixed(0)}%`  },
     ]) {
       const cell = ws2.getCell(`${col}6`)
       cell.value = label
@@ -399,7 +400,7 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     // ── Data rows starting at row 7
     const D2 = 7
-    let totGross2 = 0, totFeeOTA2 = 0, totTax2 = 0, totAllRed2 = 0
+    let totGross2 = 0, totAccomm2 = 0, totFeeOTA2 = 0, totTax2 = 0, totAllRed2 = 0
     let totNett2 = 0, totTaxBase2 = 0, totSC2 = 0, totPB12 = 0, totNettPB12 = 0
 
     listingBookings.forEach((b, idx) => {
@@ -410,20 +411,22 @@ export const GET = withAuth(async (req: NextRequest) => {
       const isEven = idx % 2 === 1
       const bgArgb = isEven ? 'FFF5F7FA' : 'FFFFFFFF'
 
-      const revNett   = parseFloat(b.totalPayout.toString())           // M: REVENUE NETT from Guesty
-      const gross     = Math.max(parseFloat(b.accommodationFare.toString()), revNett) // H: GROSS always ≥ NETT
-      const feeOTA    = gross * SVC_RATE                                // J: 3%
-      const taxSel    = Math.max(0, gross - feeOTA - revNett)          // K: MAX(0, delta)
-      const allRed    = feeOTA + taxSel                                 // L
+      const accomm    = parseFloat(b.accommodationFare.toString())         // I: raw from Guesty
+      const revNett   = parseFloat(b.totalPayout.toString())               // N: REVENUE NETT
+      const gross     = Math.max(accomm, revNett)                          // H: GROSS always ≥ NETT
+      const feeOTA    = gross * SVC_RATE                                    // K: 3%
+      const taxSel    = Math.max(0, gross - feeOTA - revNett)              // L: MAX(0, delta)
+      const allRed    = feeOTA + taxSel                                     // M
       const nights    = b.numberOfNights ?? 0
-      const taxBase   = revNett / 1.21                                  // P
-      const sc        = taxBase * 0.10                                  // Q
-      const pb1       = (taxBase + sc) * 0.10                          // R
-      const nettPB1   = revNett - pb1                                   // S
-      const perNight1 = nights > 0 ? revNett / nights : 0              // O
-      const perNight2 = nights > 0 ? nettPB1 / nights : 0              // T
+      const taxBase   = revNett / 1.21                                      // Q
+      const sc        = taxBase * 0.10                                      // R
+      const pb1       = (taxBase + sc) * 0.10                              // S
+      const nettPB1   = revNett - pb1                                       // T
+      const perNight1 = nights > 0 ? revNett / nights : 0                  // P
+      const perNight2 = nights > 0 ? nettPB1 / nights : 0                  // U
 
       totGross2   += gross
+      totAccomm2  += accomm
       totFeeOTA2  += feeOTA
       totTax2     += taxSel
       totAllRed2  += allRed
@@ -454,25 +457,26 @@ export const GET = withAuth(async (req: NextRequest) => {
       row.getCell(1).fill = isEven ? headerFill(bgArgb) : { type: 'pattern', pattern: 'none' } as ExcelJS.Fill
       row.getCell(1).border = hairBorder2
 
-      setCell2(2,  checkInStr, { align: centerAlign })                                                              // B: DATE BOOKING
-      setCell2(3,  b.guestName ?? '')                                                                               // C: NAME
-      setCell2(4,  roomCode)                                                                                        // D: ROOM
-      setCell2(5,  `${checkInStr} — ${checkOutStr}`, { align: centerAlign })                                       // E: DATE STAY
-      setCell2(6,  nights, { align: centerAlign })                                                                  // F: NIGHT
-      setCell2(7,  b.source ?? '', { align: centerAlign })                                                          // G: OTA
-      setCell2(8,  gross, { numFmt: idrFmt, align: rightAlign })                                                    // H: REVENUE GROSS
-      setCell2(9,  0, { numFmt: idrFmt, align: rightAlign, font: { size: 9, color: { argb: 'FF0000FF' }, name: 'Arial' }, forceArgb: 'FFFFFACD' }) // I: DISC (manual)
-      setCell2(10, { formula: `H${r}*${SVC_REF}`, result: feeOTA }, { numFmt: idrFmt, align: rightAlign })        // J: FEE OTA
-      setCell2(11, { formula: `MAX(0,H${r}-J${r}-M${r})`, result: taxSel }, { numFmt: idrFmt, align: rightAlign }) // K: TAX
-      setCell2(12, { formula: `I${r}+J${r}+K${r}`, result: allRed }, { numFmt: idrFmt, align: rightAlign })       // L: ALL REDUCTION
-      setCell2(13, revNett, { numFmt: idrFmt, align: rightAlign, font: boldFont })                                  // M: REVENUE NETT
-      setCell2(14, { formula: `M${r}`, result: revNett }, { numFmt: idrFmt, align: rightAlign })                   // N: REVENUE
-      setCell2(15, { formula: `IF(F${r}=0,0,N${r}/F${r})`, result: perNight1 }, { numFmt: idrFmt, align: rightAlign }) // O: /NIGHT
-      setCell2(16, { formula: `M${r}/1.21`, result: taxBase }, { numFmt: idrFmt, align: rightAlign })              // P: TAX
-      setCell2(17, { formula: `P${r}*10%`, result: sc }, { numFmt: idrFmt, align: rightAlign })                    // Q: SC
-      setCell2(18, { formula: `(P${r}+Q${r})*10%`, result: pb1 }, { numFmt: idrFmt, align: rightAlign, font: { bold: true, size: 9, name: 'Arial', color: { argb: 'FFFF0000' } } }) // R: PB1
-      setCell2(19, { formula: `M${r}-R${r}`, result: nettPB1 }, { numFmt: idrFmt, align: rightAlign, font: boldFont })  // S: NETT AFTER PB1
-      setCell2(20, { formula: `IF(F${r}=0,0,S${r}/F${r})`, result: perNight2 }, { numFmt: idrFmt, align: rightAlign })  // T: /NIGHT
+      setCell2(2,  checkInStr, { align: centerAlign })                                                                 // B: DATE BOOKING
+      setCell2(3,  b.guestName ?? '')                                                                                  // C: NAME
+      setCell2(4,  roomCode)                                                                                           // D: ROOM
+      setCell2(5,  `${checkInStr} — ${checkOutStr}`, { align: centerAlign })                                          // E: DATE STAY
+      setCell2(6,  nights, { align: centerAlign })                                                                     // F: NIGHT
+      setCell2(7,  b.source ?? '', { align: centerAlign })                                                             // G: OTA
+      setCell2(8,  gross,  { numFmt: idrFmt, align: rightAlign })                                                      // H: REVENUE GROSS
+      setCell2(9,  accomm, { numFmt: idrFmt, align: rightAlign, font: { size: 9, color: { argb: 'FF555555' }, name: 'Arial' } }) // I: ACCOMM FARE
+      setCell2(10, 0, { numFmt: idrFmt, align: rightAlign, font: { size: 9, color: { argb: 'FF0000FF' }, name: 'Arial' }, forceArgb: 'FFFFFACD' }) // J: DISC (manual)
+      setCell2(11, { formula: `H${r}*${SVC_REF}`, result: feeOTA },              { numFmt: idrFmt, align: rightAlign }) // K: FEE OTA
+      setCell2(12, { formula: `MAX(0,H${r}-K${r}-N${r})`, result: taxSel },      { numFmt: idrFmt, align: rightAlign }) // L: TAX
+      setCell2(13, { formula: `J${r}+K${r}+L${r}`, result: allRed },             { numFmt: idrFmt, align: rightAlign }) // M: ALL REDUCTION
+      setCell2(14, revNett, { numFmt: idrFmt, align: rightAlign, font: boldFont })                                      // N: REVENUE NETT
+      setCell2(15, { formula: `N${r}`, result: revNett },                         { numFmt: idrFmt, align: rightAlign }) // O: REVENUE
+      setCell2(16, { formula: `IF(F${r}=0,0,O${r}/F${r})`, result: perNight1 },  { numFmt: idrFmt, align: rightAlign }) // P: /NIGHT
+      setCell2(17, { formula: `N${r}/1.21`, result: taxBase },                    { numFmt: idrFmt, align: rightAlign }) // Q: TAX
+      setCell2(18, { formula: `Q${r}*10%`, result: sc },                          { numFmt: idrFmt, align: rightAlign }) // R: SC
+      setCell2(19, { formula: `(Q${r}+R${r})*10%`, result: pb1 },                { numFmt: idrFmt, align: rightAlign, font: { bold: true, size: 9, name: 'Arial', color: { argb: 'FFFF0000' } } }) // S: PB1
+      setCell2(20, { formula: `N${r}-S${r}`, result: nettPB1 },                  { numFmt: idrFmt, align: rightAlign, font: boldFont }) // T: NETT AFTER PB1
+      setCell2(21, { formula: `IF(F${r}=0,0,T${r}/F${r})`, result: perNight2 },  { numFmt: idrFmt, align: rightAlign }) // U: /NIGHT
     })
 
     // ── Total row
@@ -488,22 +492,23 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     const totDefs2: { col: number; letter: string; result: number; fillArgb: string; blank?: boolean }[] = [
       { col: 8,  letter: 'H', result: totGross2,    fillArgb: 'FFFFCC00' },
-      { col: 9,  letter: 'I', result: 0,            fillArgb: 'FF1E3A5F' },
-      { col: 10, letter: 'J', result: totFeeOTA2,   fillArgb: 'FF1E3A5F' },
-      { col: 11, letter: 'K', result: totTax2,      fillArgb: 'FF1E3A5F' },
-      { col: 12, letter: 'L', result: totAllRed2,   fillArgb: 'FF1E3A5F' },
-      { col: 13, letter: 'M', result: totNett2,     fillArgb: 'FFFFCC00' },
+      { col: 9,  letter: 'I', result: totAccomm2,   fillArgb: 'FFFFCC00' },
+      { col: 10, letter: 'J', result: 0,            fillArgb: 'FF1E3A5F' },
+      { col: 11, letter: 'K', result: totFeeOTA2,   fillArgb: 'FF1E3A5F' },
+      { col: 12, letter: 'L', result: totTax2,      fillArgb: 'FF1E3A5F' },
+      { col: 13, letter: 'M', result: totAllRed2,   fillArgb: 'FF1E3A5F' },
       { col: 14, letter: 'N', result: totNett2,     fillArgb: 'FFFFCC00' },
-      { col: 15, letter: 'O', result: 0, blank: true, fillArgb: 'FF1E3A5F' },
-      { col: 16, letter: 'P', result: totTaxBase2,  fillArgb: 'FF1E3A5F' },
-      { col: 17, letter: 'Q', result: totSC2,       fillArgb: 'FF1E3A5F' },
-      { col: 18, letter: 'R', result: totPB12,      fillArgb: 'FF1E3A5F' },
-      { col: 19, letter: 'S', result: totNettPB12,  fillArgb: 'FF1E6B3A' },
-      { col: 20, letter: 'T', result: 0, blank: true, fillArgb: 'FF1E3A5F' },
+      { col: 15, letter: 'O', result: totNett2,     fillArgb: 'FFFFCC00' },
+      { col: 16, letter: 'P', result: 0, blank: true, fillArgb: 'FF1E3A5F' },
+      { col: 17, letter: 'Q', result: totTaxBase2,  fillArgb: 'FF1E3A5F' },
+      { col: 18, letter: 'R', result: totSC2,       fillArgb: 'FF1E3A5F' },
+      { col: 19, letter: 'S', result: totPB12,      fillArgb: 'FF1E3A5F' },
+      { col: 20, letter: 'T', result: totNettPB12,  fillArgb: 'FF1E6B3A' },
+      { col: 21, letter: 'U', result: 0, blank: true, fillArgb: 'FF1E3A5F' },
     ]
 
     const allTotCols2 = new Set(totDefs2.map(d => d.col))
-    for (let c = 2; c <= 20; c++) {
+    for (let c = 2; c <= 21; c++) {
       if (!allTotCols2.has(c)) {
         tr2.getCell(c).fill = headerFill('FF1E3A5F')
         tr2.getCell(c).border = { top: { style: 'thin', color: { argb: 'FFAAAAAA' } }, bottom: { style: 'thin', color: { argb: 'FFAAAAAA' } } }
@@ -513,7 +518,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       const cell = tr2.getCell(col)
       cell.value = blank ? null : { formula: `SUM(${letter}${D2}:${letter}${totRow2 - 1})`, result }
       cell.numFmt = idrFmt
-      cell.font = (col === 8 || col === 13 || col === 14 || col === 19)
+      cell.font = (col === 8 || col === 9 || col === 14 || col === 15 || col === 20)
         ? boldFont
         : { ...boldFont, color: { argb: 'FFFFFFFF' } }
       cell.fill = headerFill(fillArgb)

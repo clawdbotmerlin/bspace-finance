@@ -79,10 +79,10 @@ function safeName(name: string): string {
 }
 
 // ─── Build one INCOME-format worksheet ───────────────────────────────────────
-// Column layout (20 cols, A=spacer):
+// Column layout (21 cols, A=spacer):
 // B=DATE BOOKING | C=NAME | D=ROOM | E=DATE STAY | F=NIGHT | G=OTA
-// H=REVENUE GROSS | I=DISC | J=FEE OTA | K=TAX(selisih) | L=ALL REDUCTION
-// M=REVENUE NETT | N=REVENUE | O=/NIGHT | P=TAX | Q=SC | R=PB1 | S=NETT AFTER PB1 | T=/NIGHT
+// H=REVENUE GROSS | I=ACCOMM FARE | J=DISC | K=FEE OTA | L=TAX | M=ALL REDUCTION
+// N=REVENUE NETT | O=REVENUE | P=/NIGHT | Q=TAX | R=SC | S=PB1 | T=NETT AFTER PB1 | U=/NIGHT
 function buildIncomeSheet(
   wb: ExcelJS.Workbook,
   sheetName: string,
@@ -95,12 +95,12 @@ function buildIncomeSheet(
 ) {
   const ws = wb.addWorksheet(sheetName)
 
-  // A   B    C    D    E    F   G    H    I    J    K    L    M    N    O    P    Q    R    S    T
-  const widths = [3, 12, 20, 10, 20, 7, 10, 14, 10, 12, 12, 14, 14, 14, 10, 12, 10, 12, 16, 10]
+  // A   B    C    D    E    F   G    H    I    J    K    L    M    N    O    P    Q    R    S    T    U
+  const widths = [3, 12, 20, 10, 20, 7, 10, 14, 14, 10, 12, 12, 14, 14, 14, 10, 12, 10, 12, 16, 10]
   widths.forEach((w, i) => { ws.getColumn(i + 1).width = w })
 
   // Row 1: Title
-  ws.mergeCells('A1:T1')
+  ws.mergeCells('A1:U1')
   const r1 = ws.getCell('A1')
   r1.value = sheetName === 'INCOME REPORT'
     ? 'BSpace Finance — Villa Income Report'
@@ -110,27 +110,27 @@ function buildIncomeSheet(
   ws.getRow(1).height = 24
 
   // Row 2: Period
-  ws.mergeCells('A2:T2')
+  ws.mergeCells('A2:U2')
   const r2 = ws.getCell('A2')
   r2.value = `Periode Check-in: ${fmtPeriod(from, to)}   |   ${bookings.length} booking`
   r2.font  = fnt({ color: { argb: 'FF555555' } })
   ws.getRow(2).height = 14
 
-  // Row 3: Service rate assumption ($J$3 referenced in FEE OTA formula)
-  ws.getCell('I3').value  = 'SERVICE RATE'
-  ws.getCell('I3').font   = FONT_BOLD
-  ws.getCell('J3').value  = SERVICE_RATE
-  ws.getCell('J3').numFmt = pctFmt
-  ws.getCell('J3').font   = fnt({ color: { argb: 'FF0070C0' }, bold: true })
+  // Row 3: Service rate ($K$3 referenced in FEE OTA formula)
+  ws.getCell('J3').value  = 'SERVICE RATE'
+  ws.getCell('J3').font   = FONT_BOLD
+  ws.getCell('K3').value  = SERVICE_RATE
+  ws.getCell('K3').numFmt = pctFmt
+  ws.getCell('K3').font   = fnt({ color: { argb: 'FF0070C0' }, bold: true })
   ws.getRow(3).height = 14
 
   // Row 4: blank
   ws.getRow(4).height = 6
 
   // Rows 5–6: Two-row header
-  // Gray = key input cols; E and J have sub-labels in row 6; rest merged 5:6
-  const grayInputCols = ['B', 'C', 'D', 'F', 'G', 'H']
-  const mergedCols    = ['B', 'C', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T']
+  // Gray = key input cols; E and K have sub-labels in row 6; rest merged 5:6
+  const grayInputCols = ['B', 'C', 'D', 'F', 'G', 'H', 'I']  // I = ACCOMM FARE (raw input)
+  const mergedCols    = ['B', 'C', 'D', 'F', 'G', 'H', 'I', 'J', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U']
   for (const col of mergedCols) ws.mergeCells(`${col}5:${col}6`)
 
   const HEADERS: { col: string; label: string }[] = [
@@ -141,18 +141,19 @@ function buildIncomeSheet(
     { col: 'F', label: 'NIGHT'            },
     { col: 'G', label: 'OTA'              },
     { col: 'H', label: 'REVENUE\nGROSS'  },
-    { col: 'I', label: 'DISC'             },
-    { col: 'J', label: 'FEE OTA'          },
-    { col: 'K', label: 'TAX'              },
-    { col: 'L', label: 'ALL\nREDUCTION'  },
-    { col: 'M', label: 'REVENUE\nNETT'   },
-    { col: 'N', label: 'REVENUE'          },
-    { col: 'O', label: '/ NIGHT'          },
-    { col: 'P', label: 'TAX'              },
-    { col: 'Q', label: 'SC'               },
-    { col: 'R', label: 'PB1'              },
-    { col: 'S', label: 'NETT\nAFTER PB1' },
-    { col: 'T', label: '/ NIGHT'          },
+    { col: 'I', label: 'ACCOMM\nFARE'    },
+    { col: 'J', label: 'DISC'             },
+    { col: 'K', label: 'FEE OTA'          },
+    { col: 'L', label: 'TAX'              },
+    { col: 'M', label: 'ALL\nREDUCTION'  },
+    { col: 'N', label: 'REVENUE\nNETT'   },
+    { col: 'O', label: 'REVENUE'          },
+    { col: 'P', label: '/ NIGHT'          },
+    { col: 'Q', label: 'TAX'              },
+    { col: 'R', label: 'SC'               },
+    { col: 'S', label: 'PB1'              },
+    { col: 'T', label: 'NETT\nAFTER PB1' },
+    { col: 'U', label: '/ NIGHT'          },
   ]
 
   ws.getRow(5).height = 28
@@ -164,16 +165,16 @@ function buildIncomeSheet(
     cell.value     = label
     cell.fill      = fill(isGray ? FILL_HEADER_GRAY : FILL_HEADER_DARK)
     cell.font      = isGray ? FONT_HEADER_GRAY
-      : col === 'R' ? fnt({ bold: true, color: { argb: 'FFFF0000' } })
+      : col === 'S' ? fnt({ bold: true, color: { argb: 'FFFF0000' } })
       : fnt({ bold: true, color: { argb: 'FFFFFFFF' } })
     cell.alignment = { ...ALIGN_CENTER, wrapText: true }
     cell.border    = whiteBorder
   }
 
-  // Row 6 sub-labels (for E and J only)
+  // Row 6 sub-labels (E = date sub-label, K = service rate %)
   for (const { col, label } of [
     { col: 'E', label: 'Booking'                              },
-    { col: 'J', label: `${(SERVICE_RATE * 100).toFixed(0)}%` },
+    { col: 'K', label: `${(SERVICE_RATE * 100).toFixed(0)}%` },
   ]) {
     const cell = ws.getCell(`${col}6`)
     cell.value     = label
@@ -185,7 +186,7 @@ function buildIncomeSheet(
 
   // Data rows starting at row 7
   const DATA_START = 7
-  let totGross = 0, totFeeOTA = 0, totTax = 0, totAllRed = 0
+  let totGross = 0, totAccomm = 0, totFeeOTA = 0, totTax = 0, totAllRed = 0
   let totRevNett = 0, totTax2 = 0, totSC = 0, totPB1 = 0, totNettPB1 = 0
 
   bookings.forEach((b, idx) => {
@@ -193,20 +194,22 @@ function buildIncomeSheet(
     const row   = ws.getRow(r)
     row.height  = 15
 
-    const revNett   = parseFloat(b.totalPayout.toString())          // M: REVENUE NETT from Guesty
-    const gross     = Math.max(parseFloat(b.accommodationFare.toString()), revNett) // H: GROSS always ≥ NETT
-    const feeOTA   = gross * SERVICE_RATE                            // J: 3%
-    const taxSel   = Math.max(0, gross - feeOTA - revNett)          // K: MAX(0, delta)
-    const allRed   = feeOTA + taxSel                                 // L: (DISC handled via formula)
-    const nights   = b.numberOfNights ?? 0
-    const taxBase  = revNett / 1.21                                  // P
-    const sc       = taxBase * 0.10                                  // Q
-    const pb1      = (taxBase + sc) * 0.10                          // R
-    const nettPB1  = revNett - pb1                                   // S
-    const perNight1 = nights > 0 ? revNett / nights : 0             // O
-    const perNight2 = nights > 0 ? nettPB1 / nights : 0             // T
+    const accomm    = parseFloat(b.accommodationFare.toString())        // I: raw from Guesty
+    const revNett   = parseFloat(b.totalPayout.toString())              // N: REVENUE NETT from Guesty
+    const gross     = Math.max(accomm, revNett)                         // H: GROSS always ≥ NETT
+    const feeOTA    = gross * SERVICE_RATE                               // K: 3%
+    const taxSel    = Math.max(0, gross - feeOTA - revNett)             // L: MAX(0, delta)
+    const allRed    = feeOTA + taxSel                                    // M: (DISC via formula)
+    const nights    = b.numberOfNights ?? 0
+    const taxBase   = revNett / 1.21                                     // Q
+    const sc        = taxBase * 0.10                                     // R
+    const pb1       = (taxBase + sc) * 0.10                             // S
+    const nettPB1   = revNett - pb1                                      // T
+    const perNight1 = nights > 0 ? revNett / nights : 0                 // P
+    const perNight2 = nights > 0 ? nettPB1 / nights : 0                 // U
 
     totGross    += gross
+    totAccomm   += accomm
     totFeeOTA   += feeOTA
     totTax      += taxSel
     totAllRed   += allRed
@@ -236,25 +239,26 @@ function buildIncomeSheet(
 
     const roomCode = fixEncoding(b.listing).split(' / ')[0].trim()
 
-    setCell(2,  fmtDate(b.checkIn), { align: ALIGN_CENTER })                             // B: DATE BOOKING
-    setCell(3,  b.guestName || '—')                                                       // C: NAME
-    setCell(4,  roomCode)                                                                  // D: ROOM
-    setCell(5,  fmtStay(b.checkIn, b.checkOut), { align: ALIGN_CENTER })                 // E: DATE STAY
-    setCell(6,  nights, { align: ALIGN_CENTER })                                          // F: NIGHT
-    setCell(7,  b.source.toUpperCase(), { align: ALIGN_CENTER })                          // G: OTA
-    setCell(8,  gross,    { numFmt: idrFmt, align: ALIGN_RIGHT })                         // H: REVENUE GROSS
-    setCell(9,  0,        { numFmt: idrFmt, align: ALIGN_RIGHT, font: FONT_BLUE, cellFill: fill(FILL_YELLOW) }) // I: DISC
-    setCell(10, { formula: `H${r}*$J$3`, result: feeOTA },             { numFmt: idrFmt, align: ALIGN_RIGHT }) // J: FEE OTA
-    setCell(11, { formula: `MAX(0,H${r}-J${r}-M${r})`, result: taxSel }, { numFmt: idrFmt, align: ALIGN_RIGHT }) // K: TAX
-    setCell(12, { formula: `I${r}+J${r}+K${r}`, result: allRed },      { numFmt: idrFmt, align: ALIGN_RIGHT }) // L: ALL REDUCTION
-    setCell(13, revNett,  { numFmt: idrFmt, align: ALIGN_RIGHT, font: fnt({ bold: true }) }) // M: REVENUE NETT
-    setCell(14, { formula: `M${r}`, result: revNett },                  { numFmt: idrFmt, align: ALIGN_RIGHT }) // N: REVENUE
-    setCell(15, { formula: `IF(F${r}=0,0,N${r}/F${r})`, result: perNight1 }, { numFmt: idrFmt, align: ALIGN_RIGHT }) // O: /NIGHT
-    setCell(16, { formula: `M${r}/1.21`, result: taxBase },             { numFmt: idrFmt, align: ALIGN_RIGHT }) // P: TAX
-    setCell(17, { formula: `P${r}*10%`, result: sc },                   { numFmt: idrFmt, align: ALIGN_RIGHT }) // Q: SC
-    setCell(18, { formula: `(P${r}+Q${r})*10%`, result: pb1 },         { numFmt: idrFmt, align: ALIGN_RIGHT, font: FONT_RED }) // R: PB1
-    setCell(19, { formula: `M${r}-R${r}`, result: nettPB1 },           { numFmt: idrFmt, align: ALIGN_RIGHT, font: fnt({ bold: true }) }) // S: NETT AFTER PB1
-    setCell(20, { formula: `IF(F${r}=0,0,S${r}/F${r})`, result: perNight2 }, { numFmt: idrFmt, align: ALIGN_RIGHT }) // T: /NIGHT
+    setCell(2,  fmtDate(b.checkIn), { align: ALIGN_CENTER })                                                          // B: DATE BOOKING
+    setCell(3,  b.guestName || '—')                                                                                    // C: NAME
+    setCell(4,  roomCode)                                                                                               // D: ROOM
+    setCell(5,  fmtStay(b.checkIn, b.checkOut), { align: ALIGN_CENTER })                                              // E: DATE STAY
+    setCell(6,  nights, { align: ALIGN_CENTER })                                                                       // F: NIGHT
+    setCell(7,  b.source.toUpperCase(), { align: ALIGN_CENTER })                                                       // G: OTA
+    setCell(8,  gross,   { numFmt: idrFmt, align: ALIGN_RIGHT })                                                       // H: REVENUE GROSS
+    setCell(9,  accomm,  { numFmt: idrFmt, align: ALIGN_RIGHT, font: FONT_HEADER_GRAY })                              // I: ACCOMM FARE
+    setCell(10, 0,       { numFmt: idrFmt, align: ALIGN_RIGHT, font: FONT_BLUE, cellFill: fill(FILL_YELLOW) })        // J: DISC (manual)
+    setCell(11, { formula: `H${r}*$K$3`, result: feeOTA },              { numFmt: idrFmt, align: ALIGN_RIGHT })      // K: FEE OTA
+    setCell(12, { formula: `MAX(0,H${r}-K${r}-N${r})`, result: taxSel },{ numFmt: idrFmt, align: ALIGN_RIGHT })      // L: TAX
+    setCell(13, { formula: `J${r}+K${r}+L${r}`, result: allRed },       { numFmt: idrFmt, align: ALIGN_RIGHT })      // M: ALL REDUCTION
+    setCell(14, revNett,  { numFmt: idrFmt, align: ALIGN_RIGHT, font: fnt({ bold: true }) })                          // N: REVENUE NETT
+    setCell(15, { formula: `N${r}`, result: revNett },                   { numFmt: idrFmt, align: ALIGN_RIGHT })      // O: REVENUE
+    setCell(16, { formula: `IF(F${r}=0,0,O${r}/F${r})`, result: perNight1 }, { numFmt: idrFmt, align: ALIGN_RIGHT }) // P: /NIGHT
+    setCell(17, { formula: `N${r}/1.21`, result: taxBase },              { numFmt: idrFmt, align: ALIGN_RIGHT })      // Q: TAX
+    setCell(18, { formula: `Q${r}*10%`, result: sc },                    { numFmt: idrFmt, align: ALIGN_RIGHT })      // R: SC
+    setCell(19, { formula: `(Q${r}+R${r})*10%`, result: pb1 },          { numFmt: idrFmt, align: ALIGN_RIGHT, font: FONT_RED }) // S: PB1
+    setCell(20, { formula: `N${r}-S${r}`, result: nettPB1 },            { numFmt: idrFmt, align: ALIGN_RIGHT, font: fnt({ bold: true }) }) // T: NETT AFTER PB1
+    setCell(21, { formula: `IF(F${r}=0,0,T${r}/F${r})`, result: perNight2 }, { numFmt: idrFmt, align: ALIGN_RIGHT }) // U: /NIGHT
   })
 
   // Total row
@@ -270,22 +274,23 @@ function buildIncomeSheet(
 
   const totalDefs: { col: number; letter: string; result: number; cellFill: string; font: Partial<ExcelJS.Font>; blank?: boolean }[] = [
     { col: 8,  letter: 'H', result: totGross,    cellFill: 'FFFFFF00',       font: FONT_BOLD  }, // GROSS yellow
-    { col: 9,  letter: 'I', result: 0,            cellFill: FILL_TOTAL,       font: FONT_WHITE }, // DISC
-    { col: 10, letter: 'J', result: totFeeOTA,    cellFill: FILL_TOTAL,       font: FONT_WHITE }, // FEE OTA
-    { col: 11, letter: 'K', result: totTax,       cellFill: FILL_TOTAL,       font: FONT_WHITE }, // TAX
-    { col: 12, letter: 'L', result: totAllRed,    cellFill: FILL_TOTAL,       font: FONT_WHITE }, // ALL REDUCTION
-    { col: 13, letter: 'M', result: totRevNett,   cellFill: 'FFFFFF00',       font: FONT_BOLD  }, // REV NETT yellow
-    { col: 14, letter: 'N', result: totRevNett,   cellFill: 'FFFFFF00',       font: FONT_BOLD  }, // REVENUE yellow
-    { col: 15, letter: 'O', result: 0, blank: true, cellFill: FILL_TOTAL,     font: FONT_WHITE }, // /NIGHT blank
-    { col: 16, letter: 'P', result: totTax2,      cellFill: FILL_TOTAL,       font: FONT_WHITE }, // TAX
-    { col: 17, letter: 'Q', result: totSC,        cellFill: FILL_TOTAL,       font: FONT_WHITE }, // SC
-    { col: 18, letter: 'R', result: totPB1,       cellFill: 'FFFFFF00',       font: FONT_RED   }, // PB1 yellow+red
-    { col: 19, letter: 'S', result: totNettPB1,   cellFill: FILL_OWNER_GREEN, font: FONT_BOLD  }, // NETT AFTER PB1
-    { col: 20, letter: 'T', result: 0, blank: true, cellFill: FILL_TOTAL,     font: FONT_WHITE }, // /NIGHT blank
+    { col: 9,  letter: 'I', result: totAccomm,   cellFill: 'FFFFFF00',       font: FONT_BOLD  }, // ACCOMM FARE yellow
+    { col: 10, letter: 'J', result: 0,            cellFill: FILL_TOTAL,       font: FONT_WHITE }, // DISC
+    { col: 11, letter: 'K', result: totFeeOTA,    cellFill: FILL_TOTAL,       font: FONT_WHITE }, // FEE OTA
+    { col: 12, letter: 'L', result: totTax,       cellFill: FILL_TOTAL,       font: FONT_WHITE }, // TAX
+    { col: 13, letter: 'M', result: totAllRed,    cellFill: FILL_TOTAL,       font: FONT_WHITE }, // ALL REDUCTION
+    { col: 14, letter: 'N', result: totRevNett,   cellFill: 'FFFFFF00',       font: FONT_BOLD  }, // REV NETT yellow
+    { col: 15, letter: 'O', result: totRevNett,   cellFill: 'FFFFFF00',       font: FONT_BOLD  }, // REVENUE yellow
+    { col: 16, letter: 'P', result: 0, blank: true, cellFill: FILL_TOTAL,     font: FONT_WHITE }, // /NIGHT blank
+    { col: 17, letter: 'Q', result: totTax2,      cellFill: FILL_TOTAL,       font: FONT_WHITE }, // TAX
+    { col: 18, letter: 'R', result: totSC,        cellFill: FILL_TOTAL,       font: FONT_WHITE }, // SC
+    { col: 19, letter: 'S', result: totPB1,       cellFill: 'FFFFFF00',       font: FONT_RED   }, // PB1 yellow+red
+    { col: 20, letter: 'T', result: totNettPB1,   cellFill: FILL_OWNER_GREEN, font: FONT_BOLD  }, // NETT AFTER PB1
+    { col: 21, letter: 'U', result: 0, blank: true, cellFill: FILL_TOTAL,     font: FONT_WHITE }, // /NIGHT blank
   ]
 
   const allTotalCols = new Set(totalDefs.map(d => d.col))
-  for (let c = 2; c <= 20; c++) {
+  for (let c = 2; c <= 21; c++) {
     if (!allTotalCols.has(c)) { tr.getCell(c).fill = fill(FILL_TOTAL); tr.getCell(c).border = whiteBorder }
   }
   for (const { col, letter, result, cellFill, font, blank } of totalDefs) {
