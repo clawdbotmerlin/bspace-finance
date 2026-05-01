@@ -78,6 +78,17 @@ function safeName(name: string): string {
   return name.replace(/[\\/?*[\]]/g, '').slice(0, 31)
 }
 
+// ─── OTA accommodation fare (reverse-engineered from Guesty reservation UI) ──
+// Airbnb adds ~15% guest service fee on top of host base rate → divide by 1.15
+// Booking.com adds ~30% markup on top of base rate   → divide by 1.30
+// Manual / Owner / Trip.com / unknown                → use CSV value as-is
+function otaAccomm(source: string, csvFare: number): number {
+  const s = source.toLowerCase()
+  if (s.startsWith('airbnb')) return csvFare / 1.15
+  if (s === 'booking.com')    return csvFare / 1.30
+  return csvFare
+}
+
 // ─── Build one INCOME-format worksheet ───────────────────────────────────────
 // Column layout (21 cols, A=spacer):
 // B=DATE BOOKING | C=NAME | D=ROOM | E=DATE STAY | F=NIGHT | G=OTA
@@ -194,7 +205,7 @@ function buildIncomeSheet(
     const row   = ws.getRow(r)
     row.height  = 15
 
-    const accomm    = parseFloat(b.accommodationFare.toString())        // I: raw from Guesty
+    const accomm    = otaAccomm(b.source, parseFloat(b.accommodationFare.toString())) // I: OTA base fare
     const revNett   = parseFloat(b.totalPayout.toString())              // N: REVENUE NETT from Guesty
     const gross     = Math.max(accomm, revNett)                         // H: GROSS always ≥ NETT
     const feeOTA    = gross * SERVICE_RATE                               // K: 3%

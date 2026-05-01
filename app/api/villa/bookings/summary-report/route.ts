@@ -36,6 +36,13 @@ function safeName(name: string): string {
   return name.replace(/[\\/?*[\]]/g, '').slice(0, 31)
 }
 
+function otaAccomm(source: string, csvFare: number): number {
+  const s = source.toLowerCase()
+  if (s.startsWith('airbnb')) return csvFare / 1.15
+  if (s === 'booking.com')    return csvFare / 1.30
+  return csvFare
+}
+
 function fmtDate(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
@@ -411,7 +418,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       const isEven = idx % 2 === 1
       const bgArgb = isEven ? 'FFF5F7FA' : 'FFFFFFFF'
 
-      const accomm    = parseFloat(b.accommodationFare.toString())         // I: raw from Guesty
+      const accomm    = otaAccomm(b.source, parseFloat(b.accommodationFare.toString())) // I: OTA base fare
       const revNett   = parseFloat(b.totalPayout.toString())               // N: REVENUE NETT
       const gross     = Math.max(accomm, revNett)                          // H: GROSS always ≥ NETT
       const feeOTA    = gross * SVC_RATE                                    // K: 3%

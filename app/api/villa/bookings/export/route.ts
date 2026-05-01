@@ -49,6 +49,13 @@ function safeName(s: string): string {
   return s.replace(/[\\/?*[\]]/g, '').slice(0, 31)
 }
 
+function otaAccomm(source: string, csvFare: number): number {
+  const src = source.toLowerCase()
+  if (src.startsWith('airbnb')) return csvFare / 1.15
+  if (src === 'booking.com')    return csvFare / 1.30
+  return csvFare
+}
+
 function fmtDate(d: Date): string {
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
 }
@@ -180,7 +187,7 @@ function buildIncomeSheet(
     const row = ws.getRow(r)
     row.height = 15
 
-    const accomm    = parseFloat(b.accommodationFare.toString())         // I: raw from Guesty
+    const accomm    = otaAccomm(b.source, parseFloat(b.accommodationFare.toString())) // I: OTA base fare
     const revNett   = parseFloat(b.totalPayout.toString())               // N: REVENUE NETT
     const gross     = Math.max(accomm, revNett)                          // H: GROSS always ≥ NETT
     const feeOTA    = gross * SVC_RATE                                    // K: 3%
