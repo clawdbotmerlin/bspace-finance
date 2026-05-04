@@ -82,10 +82,10 @@ function safeName(name: string): string {
 // Airbnb adds ~15% guest service fee on top of host base rate → divide by 1.15
 // Booking.com adds ~30% markup on top of base rate   → divide by 1.30
 // Manual / Owner / Trip.com / unknown                → use CSV value as-is
-function otaAccomm(source: string, csvFare: number): number {
+function otaAccomm(source: string, csvFare: number, totalPayout: number): number {
   const s = source.toLowerCase()
   if (s.startsWith('airbnb')) return csvFare / 1.15
-  if (s === 'booking.com')    return csvFare / 1.30
+  if (s === 'booking.com')    return totalPayout  // Booking.com: ACCOMM FARE = NETT
   return csvFare
 }
 
@@ -205,8 +205,8 @@ function buildIncomeSheet(
     const row   = ws.getRow(r)
     row.height  = 15
 
-    const accomm    = otaAccomm(b.source, parseFloat(b.accommodationFare.toString())) // I: OTA base fare
     const revNett   = parseFloat(b.totalPayout.toString())              // N: REVENUE NETT from Guesty
+    const accomm    = otaAccomm(b.source, parseFloat(b.accommodationFare.toString()), revNett) // I: OTA base fare (Booking.com = NETT)
     const gross     = Math.max(accomm, revNett)                         // H: GROSS always ≥ NETT
     const feeOTA    = gross * SERVICE_RATE                               // K: 3%
     const taxSel    = Math.max(0, gross - feeOTA - revNett)             // L: MAX(0, delta)

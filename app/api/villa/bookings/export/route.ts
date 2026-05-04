@@ -49,10 +49,10 @@ function safeName(s: string): string {
   return s.replace(/[\\/?*[\]]/g, '').slice(0, 31)
 }
 
-function otaAccomm(source: string, csvFare: number): number {
+function otaAccomm(source: string, csvFare: number, totalPayout: number): number {
   const src = source.toLowerCase()
   if (src.startsWith('airbnb')) return csvFare / 1.15
-  if (src === 'booking.com')    return csvFare / 1.30
+  if (src === 'booking.com')    return totalPayout  // Booking.com: ACCOMM FARE = NETT
   return csvFare
 }
 
@@ -187,8 +187,8 @@ function buildIncomeSheet(
     const row = ws.getRow(r)
     row.height = 15
 
-    const accomm    = otaAccomm(b.source, parseFloat(b.accommodationFare.toString())) // I: OTA base fare
     const revNett   = parseFloat(b.totalPayout.toString())               // N: REVENUE NETT
+    const accomm    = otaAccomm(b.source, parseFloat(b.accommodationFare.toString()), revNett) // I: OTA base fare (Booking.com = NETT)
     const gross     = Math.max(accomm, revNett)                          // H: GROSS always ≥ NETT
     const feeOTA    = gross * SVC_RATE                                    // K: 3%
     const taxSel    = Math.max(0, gross - feeOTA - revNett)              // L: MAX(0, delta)
