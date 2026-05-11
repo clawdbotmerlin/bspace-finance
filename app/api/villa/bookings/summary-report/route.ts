@@ -68,25 +68,175 @@ export const GET = withAuth(async (req: NextRequest) => {
     return NextResponse.json({ error: 'Tidak ada data untuk diekspor.' }, { status: 404 })
   }
 
-  // Aggregate by listing — NETT = GROSS × (1 − 3%) to keep NETT always < GROSS
-  const grouped = new Map<string, { gross: number; nett: number; count: number }>()
+  // Aggregate by listing
+  const grouped = new Map<string, { gross: number; nett: number; count: number; nights: number }>()
   for (const b of bookings) {
     const listingKey = fixEncoding(b.listing)
-    if (!grouped.has(listingKey)) grouped.set(listingKey, { gross: 0, nett: 0, count: 0 })
+    if (!grouped.has(listingKey)) grouped.set(listingKey, { gross: 0, nett: 0, count: 0, nights: 0 })
     const g = grouped.get(listingKey)!
     const nettRaw = parseFloat(b.totalPayout.toString())
     const gross   = Math.max(parseFloat(b.accommodationFare.toString()), nettRaw) // GROSS always ≥ NETT
-    g.gross += gross
-    g.nett  += nettRaw
+    g.gross  += gross
+    g.nett   += nettRaw
     g.count++
+    g.nights += b.numberOfNights ?? 0
+  }
+
+  // Total days in period (for OCC% = nights / totalDays)
+  let totalDays = 30
+  if (from && to) {
+    totalDays = Math.round(
+      (new Date(to).getTime() - new Date(from).getTime()) / 86400000
+    ) + 1
   }
 
   const wb = new ExcelJS.Workbook()
   wb.creator = 'BSpace Finance'
   wb.created = new Date()
 
+  // Shared border styles
+  const whiteBorder: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+    bottom: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+    left: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+    right: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+  }
+  const hairBorder: Partial<ExcelJS.Borders> = {
+    top: { style: 'hair', color: { argb: 'FFD0D5DD' } },
+    bottom: { style: 'hair', color: { argb: 'FFD0D5DD' } },
+    left: { style: 'hair', color: { argb: 'FFD0D5DD' } },
+    right: { style: 'hair', color: { argb: 'FFD0D5DD' } },
+  }
+
   // ═══════════════════════════════════════════════════════════════
-  // SHEET 1: LAPORAN MINGGUAN (summary — one row per listing)
+  // SHEET 1: REKAPITULASI (per-villa OCC + Revenue NETT overview)
+  // ═══════════════════════════════════════════════════════════════
+  const wsR = wb.addWorksheet('REKAPITULASI')
+
+  // A spacer | B VILLA | C % OCC | D REVENUE NETT | E NIGHT | F AVERAGE
+  const rColWidths = [3, 36, 10, 18, 10, 18]
+  rColWidths.forEach((w, i) => { wsR.getColumn(i + 1).width = w })
+
+  // Row 1: "REAL [PERIOD]" title
+  wsR.mergeCells('B1:F1')
+  const rTitle = wsR.getCell('B1')
+  rTitle.value = `REAL ${fmtPeriod(from, to).toUpperCase()}`
+  rTitle.font = { bold: true, size: 13, name: 'Arial', color: { argb: 'FF1E3A5F' } }
+  rTitle.alignment = { horizontal: 'left', vertical: 'middle' }
+  wsR.getRow(1).height = 22
+
+  // Row 2: sub-info
+  wsR.mergeCells('B2:F2')
+  wsR.getCell('B2').value = `Total ${grouped.size} Villa · Periode: ${fmtPeriod(from, to)} · ${totalDays} hari`
+  wsR.getCell('B2').font = { size: 10, name: 'Arial', color: { argb: 'FF555555' } }
+  wsR.getRow(2).height = 14
+
+  // Row 3: blank
+  wsR.getRow(3).height = 6
+
+  // Row 4: Header
+  const rHdrDefs: { col: string; label: string; argb: string }[] = [
+    { col: 'B', label: 'VILLA',        argb: 'FF1E3A5F' },
+    { col: 'C', label: '% OCC',        argb: 'FF2E4F6F' },
+    { col: 'D', label: 'REVENUE NETT', argb: 'FF1E6B3A' },
+    { col: 'E', label: 'NIGHT',        argb: 'FF2E4F6F' },
+    { col: 'F', label: 'AVERAGE',      argb: 'FF2E4F6F' },
+  ]
+  for (const { col, label, argb } of rHdrDefs) {
+    const cell = wsR.getCell(`${col}4`)
+    cell.value = label
+    cell.font = headerFont
+    cell.fill = headerFill(argb)
+    cell.alignment = centerAlign
+    cell.border = whiteBorder
+  }
+  wsR.getRow(4).height = 16
+
+  // Data rows — sorted by listing name
+  const R_START = 5
+  const rekapList = Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+
+  rekapList.forEach(([listing, agg], idx) => {
+    const r = R_START + idx
+    const row = wsR.getRow(r)
+    row.height = 15
+    const isEven = idx % 2 === 1
+    const occ = Math.min(1, totalDays > 0 ? agg.nights / totalDays : 0)
+    const avg = agg.nights > 0 ? agg.nett / agg.nights : 0
+
+    const fillStyle = isEven
+      ? headerFill('FFF5F7FA')
+      : ({ type: 'pattern', pattern: 'none' } as ExcelJS.Fill)
+
+    const setR = (col: number, value: ExcelJS.CellValue, opts: {
+      numFmt?: string; align?: Partial<ExcelJS.Alignment>; bold?: boolean
+    } = {}) => {
+      const cell = row.getCell(col)
+      cell.value = value
+      cell.font = opts.bold ? boldFont : dataFont
+      if (opts.numFmt) cell.numFmt = opts.numFmt
+      if (opts.align) cell.alignment = opts.align
+      cell.fill = fillStyle
+      cell.border = hairBorder
+    }
+
+    row.getCell(1).fill = fillStyle
+    row.getCell(1).border = hairBorder
+
+    setR(2, listing)
+    setR(3, occ,      { numFmt: '0.0%',  align: centerAlign })
+    setR(4, agg.nett, { numFmt: idrFmt,  align: rightAlign, bold: true })
+    setR(5, agg.nights,                  { align: centerAlign })
+    setR(6, avg,      { numFmt: idrFmt,  align: rightAlign })
+  })
+
+  // Total row
+  const rTotalRow = R_START + rekapList.length
+  const rTotNights = rekapList.reduce((s, [, a]) => s + a.nights, 0)
+  const rTotNett   = rekapList.reduce((s, [, a]) => s + a.nett, 0)
+  const rTotAvg    = rTotNights > 0 ? rTotNett / rTotNights : 0
+
+  const rTr = wsR.getRow(rTotalRow)
+  rTr.height = 18
+
+  wsR.mergeCells(`B${rTotalRow}:C${rTotalRow}`)
+  rTr.getCell(2).value = `TOTAL (${rekapList.length} Villa)`
+  rTr.getCell(2).font = { ...boldFont, color: { argb: 'FFFFFFFF' } }
+  rTr.getCell(2).fill = headerFill('FF1E3A5F')
+  rTr.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' }
+
+  // D: Revenue NETT total
+  rTr.getCell(4).value = { formula: `SUM(D${R_START}:D${rTotalRow - 1})`, result: rTotNett }
+  rTr.getCell(4).numFmt = idrFmt
+  rTr.getCell(4).font = { ...boldFont, color: { argb: 'FFFFFFFF' } }
+  rTr.getCell(4).fill = headerFill('FF1E6B3A')
+  rTr.getCell(4).alignment = rightAlign
+
+  // E: Night total
+  rTr.getCell(5).value = { formula: `SUM(E${R_START}:E${rTotalRow - 1})`, result: rTotNights }
+  rTr.getCell(5).font = { ...boldFont, color: { argb: 'FFFFFFFF' } }
+  rTr.getCell(5).fill = headerFill('FF1E3A5F')
+  rTr.getCell(5).alignment = centerAlign
+
+  // F: Overall average
+  rTr.getCell(6).value = { formula: `IF(E${rTotalRow}=0,0,D${rTotalRow}/E${rTotalRow})`, result: rTotAvg }
+  rTr.getCell(6).numFmt = idrFmt
+  rTr.getCell(6).font = { ...boldFont, color: { argb: 'FFFFFFFF' } }
+  rTr.getCell(6).fill = headerFill('FF1E3A5F')
+  rTr.getCell(6).alignment = rightAlign
+
+  for (let c = 1; c <= 6; c++) {
+    const cell = rTr.getCell(c)
+    if (!cell.fill || (cell.fill as ExcelJS.FillPattern).fgColor === undefined) {
+      cell.fill = headerFill('FF1E3A5F')
+    }
+    cell.border = { top: { style: 'thin', color: { argb: 'FFAAAAAA' } }, bottom: { style: 'thin', color: { argb: 'FFAAAAAA' } } }
+  }
+
+  wsR.views = [{ state: 'frozen', ySplit: 4 }]
+
+  // ═══════════════════════════════════════════════════════════════
+  // SHEET 2: LAPORAN MINGGUAN (summary — one row per listing)
   // ═══════════════════════════════════════════════════════════════
   const ws = wb.addWorksheet('LAPORAN MINGGUAN')
 
@@ -365,19 +515,6 @@ export const GET = withAuth(async (req: NextRequest) => {
     ws2.getRow(5).height = 28
     ws2.getRow(6).height = 14
 
-    const whiteBorder2: Partial<ExcelJS.Borders> = {
-      top: { style: 'thin', color: { argb: 'FFFFFFFF' } },
-      bottom: { style: 'thin', color: { argb: 'FFFFFFFF' } },
-      left: { style: 'thin', color: { argb: 'FFFFFFFF' } },
-      right: { style: 'thin', color: { argb: 'FFFFFFFF' } },
-    }
-    const hairBorder2: Partial<ExcelJS.Borders> = {
-      top: { style: 'hair', color: { argb: 'FFD0D5DD' } },
-      bottom: { style: 'hair', color: { argb: 'FFD0D5DD' } },
-      left: { style: 'hair', color: { argb: 'FFD0D5DD' } },
-      right: { style: 'hair', color: { argb: 'FFD0D5DD' } },
-    }
-
     for (const { col, label } of HEADERS2) {
       const isGray = grayInputCols2.includes(col)
       const cell = ws2.getCell(`${col}5`)
@@ -389,7 +526,7 @@ export const GET = withAuth(async (req: NextRequest) => {
           ? { bold: true, size: 9, name: 'Arial', color: { argb: 'FFFF0000' } }
           : headerFont
       cell.alignment = { ...centerAlign, wrapText: true }
-      cell.border = whiteBorder2
+      cell.border = whiteBorder
     }
 
     // Row 6 sub-labels (E = date sub, K = service rate %)
@@ -402,7 +539,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       cell.fill = headerFill('FF1E3A5F')
       cell.font = headerFont
       cell.alignment = centerAlign
-      cell.border = whiteBorder2
+      cell.border = whiteBorder
     }
 
     // ── Data rows starting at row 7
@@ -458,11 +595,11 @@ export const GET = withAuth(async (req: NextRequest) => {
         cell.fill = opts.forceArgb
           ? headerFill(opts.forceArgb)
           : isEven ? headerFill(bgArgb) : { type: 'pattern', pattern: 'none' } as ExcelJS.Fill
-        cell.border = hairBorder2
+        cell.border = hairBorder
       }
 
       row.getCell(1).fill = isEven ? headerFill(bgArgb) : { type: 'pattern', pattern: 'none' } as ExcelJS.Fill
-      row.getCell(1).border = hairBorder2
+      row.getCell(1).border = hairBorder
 
       setCell2(2,  checkInStr, { align: centerAlign })                                                                 // B: DATE BOOKING
       setCell2(3,  b.guestName ?? '')                                                                                  // C: NAME
