@@ -89,6 +89,113 @@ function otaAccomm(source: string, csvFare: number, totalPayout: number): number
   return csvFare
 }
 
+// ─── REKAPITULASI sheet (per-villa OCC + Revenue NETT overview) ──────────────
+
+function buildRekapSheet(
+  wb: ExcelJS.Workbook,
+  bookings: { totalPayout: { toString(): string }; numberOfNights: number | null; listing: string }[],
+  from: string | null,
+  to: string | null,
+) {
+  const grouped = new Map<string, { nett: number; nights: number }>()
+  for (const b of bookings) {
+    const key = fixEncoding(b.listing)
+    if (!grouped.has(key)) grouped.set(key, { nett: 0, nights: 0 })
+    const g = grouped.get(key)!
+    g.nett   += parseFloat(b.totalPayout.toString())
+    g.nights += b.numberOfNights ?? 0
+  }
+
+  let totalDays = 30
+  if (from && to) {
+    totalDays = Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1
+  }
+
+  const ws = wb.addWorksheet('REKAPITULASI')
+  ;[3, 36, 10, 18, 10, 18].forEach((w, i) => { ws.getColumn(i + 1).width = w })
+
+  ws.mergeCells('B1:F1')
+  ws.getCell('B1').value     = `REAL ${fmtPeriod(from, to).toUpperCase()}`
+  ws.getCell('B1').font      = fnt({ bold: true, size: 13, color: { argb: FILL_HEADER_DARK } })
+  ws.getCell('B1').alignment = ALIGN_LEFT
+  ws.getRow(1).height = 22
+
+  ws.mergeCells('B2:F2')
+  ws.getCell('B2').value = `Total ${grouped.size} Villa · Periode: ${fmtPeriod(from, to)} · ${totalDays} hari`
+  ws.getCell('B2').font  = fnt({ color: { argb: 'FF555555' } })
+  ws.getRow(2).height = 14
+  ws.getRow(3).height = 6
+
+  for (const { col, label, argb } of [
+    { col: 'B', label: 'VILLA',        argb: FILL_HEADER_DARK },
+    { col: 'C', label: '% OCC',        argb: 'FF2E4F6F'       },
+    { col: 'D', label: 'REVENUE NETT', argb: 'FF1E6B3A'       },
+    { col: 'E', label: 'NIGHT',        argb: 'FF2E4F6F'       },
+    { col: 'F', label: 'AVERAGE',      argb: 'FF2E4F6F'       },
+  ]) {
+    const cell = ws.getCell(`${col}4`)
+    cell.value = label; cell.font = FONT_WHITE
+    cell.fill  = fill(argb); cell.alignment = ALIGN_CENTER; cell.border = whiteBorder
+  }
+  ws.getRow(4).height = 16
+
+  const R_START = 5
+  const list = Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+
+  list.forEach(([listing, agg], idx) => {
+    const r   = R_START + idx
+    const row = ws.getRow(r)
+    row.height  = 15
+    const isEven  = idx % 2 === 1
+    const rowFill = isEven ? fill(FILL_ROW_ALT) : undefined
+    const occ = Math.min(1, totalDays > 0 ? agg.nights / totalDays : 0)
+    const avg = agg.nights > 0 ? agg.nett / agg.nights : 0
+
+    const setR = (col: number, value: ExcelJS.CellValue, opts: {
+      numFmt?: string; align?: Partial<ExcelJS.Alignment>; font?: Partial<ExcelJS.Font>
+    } = {}) => {
+      const cell = row.getCell(col)
+      cell.value = value; cell.font = opts.font ?? FONT_BASE
+      if (opts.numFmt) cell.numFmt = opts.numFmt
+      if (opts.align)  cell.alignment = opts.align
+      cell.fill   = rowFill ?? ({ type: 'pattern', pattern: 'none' } as ExcelJS.Fill)
+      cell.border = hairBorder
+    }
+
+    row.getCell(1).fill   = rowFill ?? ({ type: 'pattern', pattern: 'none' } as ExcelJS.Fill)
+    row.getCell(1).border = hairBorder
+    setR(2, listing)
+    setR(3, occ,       { numFmt: '0.0%', align: ALIGN_CENTER })
+    setR(4, agg.nett,  { numFmt: idrFmt, align: ALIGN_RIGHT, font: FONT_BOLD })
+    setR(5, agg.nights,                  { align: ALIGN_CENTER })
+    setR(6, avg,       { numFmt: idrFmt, align: ALIGN_RIGHT })
+  })
+
+  const totRow    = R_START + list.length
+  const totNights = list.reduce((s, [, a]) => s + a.nights, 0)
+  const totNett   = list.reduce((s, [, a]) => s + a.nett, 0)
+  const totAvg    = totNights > 0 ? totNett / totNights : 0
+  const thinBdr   = { top: { style: 'thin' as const, color: { argb: 'FFAAAAAA' } }, bottom: { style: 'thin' as const, color: { argb: 'FFAAAAAA' } } }
+
+  const tr = ws.getRow(totRow)
+  tr.height = 18
+  ws.mergeCells(`B${totRow}:C${totRow}`)
+  tr.getCell(2).value = `TOTAL (${list.length} Villa)`; tr.getCell(2).font = FONT_WHITE
+  tr.getCell(2).fill  = fill(FILL_HEADER_DARK); tr.getCell(2).alignment = ALIGN_LEFT; tr.getCell(2).border = thinBdr
+  tr.getCell(4).value = { formula: `SUM(D${R_START}:D${totRow - 1})`, result: totNett }
+  tr.getCell(4).numFmt = idrFmt; tr.getCell(4).font = FONT_WHITE; tr.getCell(4).fill = fill('FF1E6B3A')
+  tr.getCell(4).alignment = ALIGN_RIGHT; tr.getCell(4).border = thinBdr
+  tr.getCell(5).value = { formula: `SUM(E${R_START}:E${totRow - 1})`, result: totNights }
+  tr.getCell(5).font = FONT_WHITE; tr.getCell(5).fill = fill(FILL_HEADER_DARK)
+  tr.getCell(5).alignment = ALIGN_CENTER; tr.getCell(5).border = thinBdr
+  tr.getCell(6).value = { formula: `IF(E${totRow}=0,0,D${totRow}/E${totRow})`, result: totAvg }
+  tr.getCell(6).numFmt = idrFmt; tr.getCell(6).font = FONT_WHITE; tr.getCell(6).fill = fill(FILL_HEADER_DARK)
+  tr.getCell(6).alignment = ALIGN_RIGHT; tr.getCell(6).border = thinBdr
+  for (const c of [1, 3]) { tr.getCell(c).fill = fill(FILL_HEADER_DARK); tr.getCell(c).border = thinBdr }
+
+  ws.views = [{ state: 'frozen', ySplit: 4 }]
+}
+
 // ─── Build one INCOME-format worksheet ───────────────────────────────────────
 // Column layout (21 cols, A=spacer):
 // B=DATE BOOKING | C=NAME | D=ROOM | E=DATE STAY | F=NIGHT | G=OTA
@@ -344,7 +451,10 @@ export const GET = withAuth(async (req: NextRequest) => {
   wb.created = new Date()
   wb.calcProperties = { fullCalcOnLoad: true }
 
-  // Sheet 1: All bookings combined
+  // Sheet 1: REKAPITULASI overview (first tab)
+  buildRekapSheet(wb, bookings, from, to)
+
+  // Sheet 2: All bookings combined
   buildIncomeSheet(wb, 'INCOME REPORT', bookings, from, to)
 
   // Sheets 2+: One tab per listing
