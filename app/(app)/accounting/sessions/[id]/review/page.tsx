@@ -173,6 +173,19 @@ export default function ReviewPage() {
     [discrepancies]
   )
 
+  // mutationIds matched to ≥2 cashier entries = N:1 batch settlement
+  const groupMutationIds = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const e of entries) {
+      if (e.matchedMutationId && e.matchStatus === 'matched') {
+        counts.set(e.matchedMutationId, (counts.get(e.matchedMutationId) ?? 0) + 1)
+      }
+    }
+    const ids = new Set<string>()
+    counts.forEach((count, id) => { if (count >= 2) ids.add(id) })
+    return ids
+  }, [entries])
+
   async function fetchAll() {
     setLoading(true); setError('')
     try {
@@ -514,6 +527,7 @@ export default function ReviewPage() {
                     onResolve={setResolveTarget}
                     onIgnore={handleIgnoreDisc}
                     ignoringIds={ignoringIds}
+                    groupMutationIds={groupMutationIds}
                   />
                 </div>
                 {/* Ringkasan immediately follows its block */}
@@ -640,7 +654,7 @@ export default function ReviewPage() {
 
 // ─── Block Section ────────────────────────────────────────────────────────────
 
-function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEntries, cashEntries, discByEntryId, tab, isReadOnly, onResolve, onIgnore, ignoringIds }: {
+function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEntries, cashEntries, discByEntryId, tab, isReadOnly, onResolve, onIgnore, ignoringIds, groupMutationIds }: {
   block: 'REG' | 'EV'
   session: SessionDetail
   kasirNames: string[]
@@ -653,6 +667,7 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
   onResolve: (d: Discrepancy) => void
   onIgnore: (d: Discrepancy) => void
   ignoringIds: Set<string>
+  groupMutationIds: Set<string>
 }) {
   const blockLabel = block === 'REG' ? '📋 REG' : '🎪 EV'
   const blockColor = block === 'REG' ? 'bg-blue-700' : 'bg-violet-700'
@@ -767,6 +782,7 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
                           ignoringIds={ignoringIds}
                           readOnly={isReadOnly}
                           isLast={isLast}
+                          isGroupMatch={entry.matchedMutationId ? groupMutationIds.has(entry.matchedMutationId) : false}
                         />
                       )
                     })}
@@ -841,7 +857,7 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
 
 // ─── Entry Row ────────────────────────────────────────────────────────────────
 
-function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, onIgnore, ignoringIds, readOnly, isLast }: {
+function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, onIgnore, ignoringIds, readOnly, isLast, isGroupMatch }: {
   entry: CashierEntryFull
   kasirNames: string[]
   discrepancy: Discrepancy | null
@@ -851,6 +867,7 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, onIg
   ignoringIds: Set<string>
   readOnly: boolean
   isLast: boolean
+  isGroupMatch?: boolean
 }) {
   const isZero = entry.matchStatus === 'zero'
   const isUnmatched = entry.matchStatus === 'unmatched'
@@ -908,8 +925,18 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, onIg
       <td className="px-3 py-2 w-44">
         {isMatched && entry.bankMutation ? (
           <div>
-            <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
+            <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold">
               <CheckCircle2 className="w-3.5 h-3.5" />Cocok
+              {isGroupMatch && (
+                <Tooltip content="Digabung: beberapa transaksi kasir dijumlah menjadi satu mutasi bank">
+                  <span className="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-bold bg-blue-100 text-blue-700 rounded border border-blue-200 cursor-default">
+                    <svg className="w-2.5 h-2.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M6 4H3a1 1 0 00-1 1v6a1 1 0 001 1h3M10 4h3a1 1 0 011 1v6a1 1 0 01-1 1h-3M6 8h4"/>
+                    </svg>
+                    Gabung
+                  </span>
+                </Tooltip>
+              )}
             </div>
             <div className="text-[10px] text-slate-500 mt-0.5">
               {formatRupiah(entry.bankMutation.grossAmount)} · {new Date(entry.bankMutation.transactionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' })} {settlementBadge(entry.bankMutation.transactionDate, sessionDate)}
