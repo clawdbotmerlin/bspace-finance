@@ -527,6 +527,7 @@ export default function ReviewPage() {
                     onResolve={setResolveTarget}
                     onIgnore={handleIgnoreDisc}
                     ignoringIds={ignoringIds}
+                    groupMutationIds={groupMutationIds}
                   />
                 </div>
                 {/* Ringkasan immediately follows its block */}
@@ -653,7 +654,7 @@ export default function ReviewPage() {
 
 // ─── Block Section ────────────────────────────────────────────────────────────
 
-function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEntries, cashEntries, discByEntryId, tab, isReadOnly, onResolve, onIgnore, ignoringIds }: {
+function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEntries, cashEntries, discByEntryId, tab, isReadOnly, onResolve, onIgnore, ignoringIds, groupMutationIds }: {
   block: 'REG' | 'EV'
   session: SessionDetail
   kasirNames: string[]
@@ -666,6 +667,7 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
   onResolve: (d: Discrepancy) => void
   onIgnore: (d: Discrepancy) => void
   ignoringIds: Set<string>
+  groupMutationIds: Set<string>
 }) {
   const blockLabel = block === 'REG' ? '📋 REG' : '🎪 EV'
   const blockColor = block === 'REG' ? 'bg-blue-700' : 'bg-violet-700'
