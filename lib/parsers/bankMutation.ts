@@ -92,6 +92,17 @@ function parseDate(raw: unknown, format: string | undefined): string | null {
   // YYYY-MM-DD HH:mm:ss
   if (s.length >= 10 && s[4] === '-') return s.slice(0, 10)
 
+  // "DD MMM YYYY ..." (e.g. "03 May 2026 04:14:33" — Mandiri CSV format)
+  const DMY_MONTHS: Record<string, string> = {
+    jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+    jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+  }
+  const dmyMatch = s.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/)
+  if (dmyMatch) {
+    const m = DMY_MONTHS[dmyMatch[2].toLowerCase()]
+    if (m) return `${dmyMatch[3]}-${m}-${dmyMatch[1].padStart(2, '0')}`
+  }
+
   return null
 }
 
