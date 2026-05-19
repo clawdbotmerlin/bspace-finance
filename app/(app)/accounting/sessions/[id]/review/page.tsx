@@ -322,6 +322,19 @@ export default function ReviewPage() {
   const edcEntries = entries.filter(e => e.paymentType !== 'CASH' && e.paymentType !== 'VOUCHER')
   const cashEntries = entries.filter(e => e.paymentType === 'CASH' || e.paymentType === 'VOUCHER')
 
+  // Detect group/batch matches: mutationIds shared by ≥2 entries = N:1 batch settlement
+  const groupMutationIds = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const e of entries) {
+      if (e.matchedMutationId && e.matchStatus === 'matched') {
+        counts.set(e.matchedMutationId, (counts.get(e.matchedMutationId) ?? 0) + 1)
+      }
+    }
+    const ids = new Set<string>()
+    for (const [id, count] of counts) { if (count >= 2) ids.add(id) }
+    return ids
+  }, [entries])
+
   // Tab filtering (only affects EDC display)
   const needsAttentionEntries = edcEntries.filter(
     e => e.matchStatus === 'unmatched' || discByEntryId.get(e.id)?.discrepancyType === 'amount_mismatch'
@@ -767,6 +780,7 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
                           ignoringIds={ignoringIds}
                           readOnly={isReadOnly}
                           isLast={isLast}
+                          isGroupMatch={entry.matchedMutationId ? groupMutationIds.has(entry.matchedMutationId) : false}
                         />
                       )
                     })}
@@ -841,7 +855,7 @@ function BlockSection({ block, session, kasirNames, filteredEdcEntries, allEdcEn
 
 // ─── Entry Row ────────────────────────────────────────────────────────────────
 
-function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, onIgnore, ignoringIds, readOnly, isLast }: {
+function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, onIgnore, ignoringIds, readOnly, isLast, isGroupMatch }: {
   entry: CashierEntryFull
   kasirNames: string[]
   discrepancy: Discrepancy | null
@@ -851,6 +865,7 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, onIg
   ignoringIds: Set<string>
   readOnly: boolean
   isLast: boolean
+  isGroupMatch?: boolean
 }) {
   const isZero = entry.matchStatus === 'zero'
   const isUnmatched = entry.matchStatus === 'unmatched'
@@ -910,9 +925,12 @@ function EntryRow({ entry, kasirNames, discrepancy, sessionDate, onResolve, onIg
           <div>
             <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
               <CheckCircle2 className="w-3.5 h-3.5" />Cocok
+              {isGroupMatch && (
+                <span className="px-1 py-0.5 text-[9px] font-bold bg-blue-100 text-blue-700 rounded uppercase tracking-wide">Batch</span>
+              )}
             </div>
             <div className="text-[10px] text-slate-500 mt-0.5">
-              {formatRupiah(entry.bankMutation.grossAmount)} · {new Date(entry.bankMutation.transactionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' })} {settlementBadge(entry.bankMutation.transactionDate, sessionDate)}
+              {isGroupMatch ? 'Total' : ''}{formatRupiah(entry.bankMutation.grossAmount)} · {new Date(entry.bankMutation.transactionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' })} {settlementBadge(entry.bankMutation.transactionDate, sessionDate)}
             </div>
             {entry.bankMutation.description && (
               <Tooltip content={entry.bankMutation.description}>
