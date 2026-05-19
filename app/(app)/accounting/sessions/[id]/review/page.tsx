@@ -331,7 +331,7 @@ export default function ReviewPage() {
       }
     }
     const ids = new Set<string>()
-    for (const [id, count] of counts) { if (count >= 2) ids.add(id) }
+    counts.forEach((count, id) => { if (count >= 2) ids.add(id) })
     return ids
   }, [entries])
 
