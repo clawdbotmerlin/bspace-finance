@@ -173,6 +173,19 @@ export default function ReviewPage() {
     [discrepancies]
   )
 
+  // Detect group/batch matches: mutationIds shared by ≥2 entries = N:1 batch settlement
+  const groupMutationIds = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const e of entries) {
+      if (e.matchedMutationId && e.matchStatus === 'matched') {
+        counts.set(e.matchedMutationId, (counts.get(e.matchedMutationId) ?? 0) + 1)
+      }
+    }
+    const ids = new Set<string>()
+    counts.forEach((count, id) => { if (count >= 2) ids.add(id) })
+    return ids
+  }, [entries])
+
   async function fetchAll() {
     setLoading(true); setError('')
     try {
@@ -321,19 +334,6 @@ export default function ReviewPage() {
   // Separate EDC entries from CASH/VOUCHER
   const edcEntries = entries.filter(e => e.paymentType !== 'CASH' && e.paymentType !== 'VOUCHER')
   const cashEntries = entries.filter(e => e.paymentType === 'CASH' || e.paymentType === 'VOUCHER')
-
-  // Detect group/batch matches: mutationIds shared by ≥2 entries = N:1 batch settlement
-  const groupMutationIds = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const e of entries) {
-      if (e.matchedMutationId && e.matchStatus === 'matched') {
-        counts.set(e.matchedMutationId, (counts.get(e.matchedMutationId) ?? 0) + 1)
-      }
-    }
-    const ids = new Set<string>()
-    counts.forEach((count, id) => { if (count >= 2) ids.add(id) })
-    return ids
-  }, [entries])
 
   // Tab filtering (only affects EDC display)
   const needsAttentionEntries = edcEntries.filter(
