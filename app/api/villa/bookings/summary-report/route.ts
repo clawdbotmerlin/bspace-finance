@@ -183,7 +183,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     row.getCell(1).fill = fillStyle
     row.getCell(1).border = hairBorder
 
-    setR(2, listing)
+    setR(2, listing.split(' / ')[0].trim())
     setR(3, occ,      { numFmt: '0.0%',  align: centerAlign })
     setR(4, agg.nett, { numFmt: idrFmt,  align: rightAlign, bold: true })
     setR(5, agg.nights,                  { align: centerAlign })
@@ -233,6 +233,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     cell.border = { top: { style: 'thin', color: { argb: 'FFAAAAAA' } }, bottom: { style: 'thin', color: { argb: 'FFAAAAAA' } } }
   }
 
+  wsR.autoFilter = 'B4:F4'
   wsR.views = [{ state: 'frozen', ySplit: 4 }]
 
   // ═══════════════════════════════════════════════════════════════

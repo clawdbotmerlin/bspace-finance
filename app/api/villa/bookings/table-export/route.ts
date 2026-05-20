@@ -164,7 +164,7 @@ function buildRekapSheet(
 
     row.getCell(1).fill   = rowFill ?? ({ type: 'pattern', pattern: 'none' } as ExcelJS.Fill)
     row.getCell(1).border = hairBorder
-    setR(2, listing)
+    setR(2, listing.split(' / ')[0].trim())
     setR(3, occ,       { numFmt: '0.0%', align: ALIGN_CENTER })
     setR(4, agg.nett,  { numFmt: idrFmt, align: ALIGN_RIGHT, font: FONT_BOLD })
     setR(5, agg.nights,                  { align: ALIGN_CENTER })
@@ -193,6 +193,7 @@ function buildRekapSheet(
   tr.getCell(6).alignment = ALIGN_RIGHT; tr.getCell(6).border = thinBdr
   for (const c of [1, 3]) { tr.getCell(c).fill = fill(FILL_HEADER_DARK); tr.getCell(c).border = thinBdr }
 
+  ws.autoFilter = 'B4:F4'
   ws.views = [{ state: 'frozen', ySplit: 4 }]
 }
 
