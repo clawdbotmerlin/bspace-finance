@@ -39,7 +39,13 @@ function safeName(name: string): string {
 function otaAccomm(source: string, csvFare: number, totalPayout: number): number {
   const s = source.toLowerCase()
   if (s.startsWith('airbnb')) return csvFare / 1.15
+  if (s === 'booking.com') return totalPayout
   return csvFare
+}
+
+function otaNett(source: string, accommodationFare: number, totalPayout: number): number {
+  if (source.toLowerCase().trim() === 'booking.com') return accommodationFare
+  return totalPayout
 }
 
 function fmtDate(d: Date): string {
@@ -73,8 +79,8 @@ export const GET = withAuth(async (req: NextRequest) => {
     const listingKey = fixEncoding(b.listing)
     if (!grouped.has(listingKey)) grouped.set(listingKey, { gross: 0, nett: 0, count: 0, nights: 0 })
     const g = grouped.get(listingKey)!
-    const nettRaw = parseFloat(b.totalPayout.toString())
-    const gross   = Math.max(parseFloat(b.accommodationFare.toString()), nettRaw) // GROSS always ≥ NETT
+    const nettRaw = otaNett(b.source, parseFloat(b.accommodationFare.toString()), parseFloat(b.totalPayout.toString()))
+    const gross   = Math.max(parseFloat(b.accommodationFare.toString()), parseFloat(b.totalPayout.toString())) // GROSS always ≥ NETT
     g.gross  += gross
     g.nett   += nettRaw
     g.count++
@@ -556,7 +562,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       const isEven = idx % 2 === 1
       const bgArgb = isEven ? 'FFF5F7FA' : 'FFFFFFFF'
 
-      const revNett   = parseFloat(b.totalPayout.toString())               // N: REVENUE NETT
+      const revNett   = otaNett(b.source, parseFloat(b.accommodationFare.toString()), parseFloat(b.totalPayout.toString())) // N: REVENUE NETT
       const accomm    = otaAccomm(b.source, parseFloat(b.accommodationFare.toString()), revNett) // I: OTA base fare (Booking.com = NETT)
       const gross     = Math.max(accomm, revNett)                          // H: GROSS always ≥ NETT
       const feeOTA    = gross * SVC_RATE                                    // K: 3%

@@ -85,14 +85,20 @@ function safeName(name: string): string {
 function otaAccomm(source: string, csvFare: number, totalPayout: number): number {
   const s = source.toLowerCase()
   if (s.startsWith('airbnb')) return csvFare / 1.15
+  if (s === 'booking.com') return totalPayout
   return csvFare
+}
+
+function otaNett(source: string, accommodationFare: number, totalPayout: number): number {
+  if (source.toLowerCase().trim() === 'booking.com') return accommodationFare
+  return totalPayout
 }
 
 // ─── REKAPITULASI sheet (per-villa OCC + Revenue NETT overview) ──────────────
 
 function buildRekapSheet(
   wb: ExcelJS.Workbook,
-  bookings: { totalPayout: { toString(): string }; numberOfNights: number | null; listing: string }[],
+  bookings: { source: string; totalPayout: { toString(): string }; accommodationFare: { toString(): string }; numberOfNights: number | null; listing: string }[],
   from: string | null,
   to: string | null,
 ) {
@@ -101,7 +107,7 @@ function buildRekapSheet(
     const key = fixEncoding(b.listing)
     if (!grouped.has(key)) grouped.set(key, { nett: 0, nights: 0 })
     const g = grouped.get(key)!
-    g.nett   += parseFloat(b.totalPayout.toString())
+    g.nett   += otaNett(b.source, parseFloat(b.accommodationFare.toString()), parseFloat(b.totalPayout.toString()))
     g.nights += b.numberOfNights ?? 0
   }
 
@@ -312,7 +318,7 @@ function buildIncomeSheet(
     const row   = ws.getRow(r)
     row.height  = 15
 
-    const revNett   = parseFloat(b.totalPayout.toString())              // N: REVENUE NETT from Guesty
+    const revNett   = otaNett(b.source, parseFloat(b.accommodationFare.toString()), parseFloat(b.totalPayout.toString())) // N: REVENUE NETT
     const accomm    = otaAccomm(b.source, parseFloat(b.accommodationFare.toString()), revNett) // I: OTA base fare (Booking.com = NETT)
     const gross     = Math.max(accomm, revNett)                         // H: GROSS always ≥ NETT
     const feeOTA    = gross * SERVICE_RATE                               // K: 3%
