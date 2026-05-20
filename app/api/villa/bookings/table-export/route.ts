@@ -139,7 +139,7 @@ function buildRekapSheet(
   ws.getRow(4).height = 16
 
   const R_START = 5
-  const list = Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+  const list = Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' }))
 
   list.forEach(([listing, agg], idx) => {
     const r   = R_START + idx

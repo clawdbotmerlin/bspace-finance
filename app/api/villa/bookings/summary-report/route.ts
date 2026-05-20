@@ -153,7 +153,7 @@ export const GET = withAuth(async (req: NextRequest) => {
 
   // Data rows — sorted by listing name
   const R_START = 5
-  const rekapList = Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+  const rekapList = Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' }))
 
   rekapList.forEach(([listing, agg], idx) => {
     const r = R_START + idx
