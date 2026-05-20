@@ -28,15 +28,22 @@ interface NotifCounts {
 }
 
 const NAV_ITEMS = [
-  { href: '/accounting', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'finance', 'manager'] },
-  { href: '/accounting/sessions/new', label: 'Rekonsiliasi Baru', icon: Plus, roles: ['admin', 'finance'] },
-  { href: '/accounting/history', label: 'Riwayat', icon: History, roles: ['admin', 'finance', 'manager'] },
-  { href: '/accounting/signoff', label: 'Persetujuan', icon: ClipboardCheck, roles: ['admin', 'manager'] },
-  { href: '/accounting/discrepancies', label: 'Diskrepansi', icon: AlertTriangle, roles: ['admin', 'finance'] },
-  { href: '/villa-analytics', label: 'Villa Analytics', icon: BarChart3, roles: ['admin', 'finance'] },
-  { href: '/accounting/admin/master-data', label: 'Data Master', icon: Database, roles: ['admin'] },
-  { href: '/accounting/admin/audit-log', label: 'Log Audit', icon: ScrollText, roles: ['admin'] },
-  { href: '/accounting/admin/users', label: 'Pengguna', icon: Users, roles: ['admin'] },
+  // ── Accounting module ──
+  { href: '/accounting', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'finance', 'manager'], module: 'accounting' },
+  { href: '/accounting/sessions/new', label: 'Rekonsiliasi Baru', icon: Plus, roles: ['admin', 'finance'], module: 'accounting' },
+  { href: '/accounting/history', label: 'Riwayat', icon: History, roles: ['admin', 'finance', 'manager'], module: 'accounting' },
+  { href: '/accounting/signoff', label: 'Persetujuan', icon: ClipboardCheck, roles: ['admin', 'manager'], module: 'accounting' },
+  { href: '/accounting/discrepancies', label: 'Diskrepansi', icon: AlertTriangle, roles: ['admin', 'finance'], module: 'accounting' },
+  { href: '/accounting/admin/master-data', label: 'Data Master', icon: Database, roles: ['admin'], module: 'accounting' },
+  { href: '/accounting/admin/audit-log', label: 'Log Audit', icon: ScrollText, roles: ['admin'], module: 'accounting' },
+  { href: '/accounting/admin/users', label: 'Pengguna', icon: Users, roles: ['admin'], module: 'accounting' },
+  // ── Villa Analytics module ──
+  { href: '/villa-analytics', label: 'Overview', icon: BarChart3, roles: ['admin', 'finance'], module: 'villa' },
+]
+
+const MODULES = [
+  { id: 'accounting', label: 'Accounting', href: '/accounting' },
+  { id: 'villa',      label: 'Villa',      href: '/villa-analytics' },
 ]
 
 const POLL_MS = 60_000
@@ -79,17 +86,40 @@ export function Navbar({ userName, userRole }: NavbarProps) {
     return () => clearInterval(id)
   }, [fetchNotifs])
 
-  const visibleNav = NAV_ITEMS.filter((item) => item.roles.includes(userRole))
+  // Detect current module from pathname
+  const currentModule = pathname.startsWith('/villa-analytics') ? 'villa' : 'accounting'
+
+  const visibleNav = NAV_ITEMS.filter(
+    (item) => item.roles.includes(userRole) && item.module === currentModule
+  )
 
   return (
     <>
       <nav className="fixed top-0 left-0 right-0 z-50 h-12 bg-[#0d1b2a] border-b border-white/[0.08] flex items-stretch px-4">
         {/* Brand */}
-        <Link href="/home" className="flex items-center gap-1 shrink-0 mr-4 pr-4 border-r border-white/[0.08]">
+        <Link href="/home" className="flex items-center gap-1 shrink-0 mr-3 pr-3 border-r border-white/[0.08]">
           <span className="text-white font-bold text-[15px] tracking-tight">
             BSpace <span className="text-blue-400">Finance</span>
           </span>
         </Link>
+
+        {/* Module switcher */}
+        <div className="hidden md:flex items-center gap-1 mr-3 pr-3 border-r border-white/[0.08]">
+          {MODULES.map((m) => (
+            <Link
+              key={m.id}
+              href={m.href}
+              className={cn(
+                'px-2.5 py-1 rounded text-[11px] font-semibold transition-colors',
+                currentModule === m.id
+                  ? 'bg-blue-600/30 text-blue-300'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+              )}
+            >
+              {m.label}
+            </Link>
+          ))}
+        </div>
 
         {/* Desktop nav links */}
         <div className="hidden md:flex items-stretch gap-0 flex-1">
