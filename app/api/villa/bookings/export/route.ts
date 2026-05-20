@@ -681,9 +681,10 @@ export const GET = withAuth(async (req: NextRequest) => {
   buildRekapSheet(wb, bookings, from, to)
 
   for (const [listingName, rows] of Array.from(byListing.entries())) {
-    const income = buildIncomeSheet(wb, listingName, rows, from, to)
-    const exp    = buildExpSheet(wb, listingName)
-    buildGlobalSheet(wb, listingName, income, exp, from, to)
+    const shortName = listingName.split(' / ')[0].trim()
+    const income = buildIncomeSheet(wb, shortName, rows, from, to)
+    const exp    = buildExpSheet(wb, shortName)
+    buildGlobalSheet(wb, shortName, income, exp, from, to)
   }
 
   const buffer = await wb.xlsx.writeBuffer()

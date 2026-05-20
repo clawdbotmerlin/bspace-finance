@@ -449,7 +449,8 @@ export const GET = withAuth(async (req: NextRequest) => {
   }
 
   for (const [listingName, listingBookings] of Array.from(byListing.entries())) {
-    const sheetName = safeName(listingName)
+    const shortName = listingName.split(' / ')[0].trim()
+    const sheetName = safeName(shortName)
     const ws2 = wb.addWorksheet(sheetName)
 
     // 21-column layout: A spacer | B DATE BOOKING | C NAME | D ROOM | E DATE STAY | F NIGHT | G OTA
@@ -461,7 +462,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     // ── Row 1: Brand + listing title
     ws2.mergeCells('A1:U1')
     const t1 = ws2.getCell('A1')
-    t1.value = `BSpace Finance — ${listingName}`
+    t1.value = `BSpace Finance — ${shortName}`
     t1.font = { bold: true, size: 13, name: 'Arial', color: { argb: 'FF1E3A5F' } }
     t1.alignment = { horizontal: 'left', vertical: 'middle' }
     ws2.getRow(1).height = 22

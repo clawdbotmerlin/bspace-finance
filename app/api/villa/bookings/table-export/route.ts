@@ -466,7 +466,8 @@ export const GET = withAuth(async (req: NextRequest) => {
     byListing.get(key)!.push(b)
   }
   for (const [listingName, listingBookings] of Array.from(byListing.entries())) {
-    buildIncomeSheet(wb, safeName(listingName), listingBookings, from, to)
+    const shortName = listingName.split(' / ')[0].trim()
+    buildIncomeSheet(wb, safeName(shortName), listingBookings, from, to)
   }
 
   // ── Output ──────────────────────────────────────────────────────────────────
