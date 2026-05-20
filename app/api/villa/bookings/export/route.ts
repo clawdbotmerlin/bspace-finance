@@ -52,7 +52,6 @@ function safeName(s: string): string {
 function otaAccomm(source: string, csvFare: number, totalPayout: number): number {
   const src = source.toLowerCase()
   if (src.startsWith('airbnb')) return csvFare / 1.15
-  if (src === 'booking.com')    return totalPayout  // Booking.com: ACCOMM FARE = NETT
   return csvFare
 }
 
