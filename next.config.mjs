@@ -3,7 +3,6 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['xlsx', 'puppeteer', 'bcryptjs'],
   },
-  output: 'standalone',
   async redirects() {
     return [
       // Legacy routes before superapp restructure (FRO-35) — redirect to /accounting/*
