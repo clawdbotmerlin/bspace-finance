@@ -36,7 +36,20 @@ function safeName(name: string): string {
   return name.replace(/[\\/?*[\]]/g, '').slice(0, 31)
 }
 
-function otaAccomm(source: string, csvFare: number, totalPayout: number): number {
+// ACCOMM FARE = accommodation-only component
+// Airbnb: csvFare includes 15% guest service fee → divide by 1.15 to get base rate
+// Booking.com: csvFare = accommodation fare; totalPayout = csvFare × 1.10 (10% VAT remittance on top)
+// Others: use csvFare as-is
+function otaAccomm(source: string, csvFare: number, _totalPayout: number): number {
+  const s = source.toLowerCase()
+  if (s.startsWith('airbnb')) return csvFare / 1.15
+  return csvFare
+}
+
+// REVENUE GROSS = total amount received from the OTA (may include taxes)
+// For Booking.com, totalPayout = csvFare × 1.10 (Booking.com remits accommodation + VAT together)
+// For Airbnb, gross = same as accomm (Airbnb pays net accommodation only)
+function otaGross(source: string, csvFare: number, totalPayout: number): number {
   const s = source.toLowerCase()
   if (s.startsWith('airbnb')) return csvFare / 1.15
   if (s === 'booking.com') return totalPayout
@@ -45,7 +58,7 @@ function otaAccomm(source: string, csvFare: number, totalPayout: number): number
 
 // TODO: Booking.com REVENUE NETT should = accommodationFare - hostChannelFee (OTA commission).
 // The "Host channel fee" field is not in the current Guesty CSV export (only 11 columns).
-// Using accommodationFare as a stand-in until the CSV is re-exported with that column.
+// Using accommodationFare (csvFare) as a stand-in until commission data is available.
 function otaNett(source: string, accommodationFare: number, totalPayout: number): number {
   if (source.toLowerCase().trim() === 'booking.com') return accommodationFare
   return totalPayout
@@ -83,7 +96,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     if (!grouped.has(listingKey)) grouped.set(listingKey, { gross: 0, nett: 0, count: 0, nights: 0 })
     const g = grouped.get(listingKey)!
     const nettRaw = otaNett(b.source, parseFloat(b.accommodationFare.toString()), parseFloat(b.totalPayout.toString()))
-    const gross   = Math.max(parseFloat(b.accommodationFare.toString()), parseFloat(b.totalPayout.toString())) // GROSS always ≥ NETT
+    const gross   = otaGross(b.source, parseFloat(b.accommodationFare.toString()), parseFloat(b.totalPayout.toString()))
     g.gross  += gross
     g.nett   += nettRaw
     g.count++
@@ -568,8 +581,8 @@ export const GET = withAuth(async (req: NextRequest) => {
       const csvFare   = parseFloat(b.accommodationFare.toString())
       const csvPayout = parseFloat(b.totalPayout.toString())
       const revNett   = otaNett(b.source, csvFare, csvPayout)               // N: REVENUE NETT
-      const accomm    = otaAccomm(b.source, csvFare, csvPayout)             // I: ACCOMM FARE (Booking.com = totalPayout)
-      const gross     = accomm                                               // H: GROSS = ACCOMM FARE
+      const accomm    = otaAccomm(b.source, csvFare, csvPayout)             // I: ACCOMM FARE
+      const gross     = otaGross(b.source, csvFare, csvPayout)              // H: REVENUE GROSS (Booking.com = totalPayout)
       const feeOTA    = gross * SVC_RATE                                    // K: 3%
       const taxSel    = Math.max(0, gross - feeOTA - revNett)              // L: MAX(0, delta)
       const allRed    = feeOTA + taxSel                                     // M
