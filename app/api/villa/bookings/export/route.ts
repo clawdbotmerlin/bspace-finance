@@ -56,10 +56,12 @@ function otaAccomm(source: string, csvFare: number, totalPayout: number): number
   return csvFare
 }
 
-// Booking.com REVENUE NETT = accommodationFare / 1.33 (host net after Booking.com ~33% commission+tax)
-function otaNett(source: string, accommodationFare: number, _totalPayout: number): number {
-  if (source.toLowerCase().trim() === 'booking.com') return Math.round(accommodationFare / 1.33)
-  return _totalPayout
+// TODO: Booking.com REVENUE NETT should = accommodationFare - hostChannelFee (OTA commission).
+// The "Host channel fee" field is not in the current Guesty CSV export (only 11 columns).
+// Using accommodationFare as a stand-in until the CSV is re-exported with that column.
+function otaNett(source: string, accommodationFare: number, totalPayout: number): number {
+  if (source.toLowerCase().trim() === 'booking.com') return accommodationFare
+  return totalPayout
 }
 
 function fmtDate(d: Date): string {
@@ -306,7 +308,7 @@ function buildIncomeSheet(
     const csvPayout = parseFloat(b.totalPayout.toString())
     const revNett   = otaNett(b.source, csvFare, csvPayout)               // N: REVENUE NETT
     const accomm    = otaAccomm(b.source, csvFare, csvPayout)             // I: ACCOMM FARE (Booking.com = totalPayout)
-    const gross     = Math.max(accomm, revNett)                          // H: GROSS always ≥ NETT
+    const gross     = accomm                                               // H: GROSS = ACCOMM FARE
     const feeOTA    = gross * SVC_RATE                                    // K: 3%
     const taxSel    = Math.max(0, gross - feeOTA - revNett)              // L: MAX(0, delta)
     const allRed    = feeOTA + taxSel                                     // M
