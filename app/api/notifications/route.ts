@@ -23,8 +23,8 @@ export const GET = withAuth(async (_req, authedSession) => {
   }
 
   return NextResponse.json({
-    pendingSignoff,
+    pendingSignoff,        // kept for API compat, no longer shown in UI
     openDiscrepancies,
-    total: pendingSignoff + openDiscrepancies,
+    total: openDiscrepancies,   // sign-off flow disabled; bell only reflects discrepancies
   })
 }, ['admin', 'finance', 'manager'])

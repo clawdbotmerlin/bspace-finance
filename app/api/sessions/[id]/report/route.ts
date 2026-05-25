@@ -429,9 +429,9 @@ export const GET = withAuth(async (req: NextRequest) => {
   if (!session) {
     return NextResponse.json({ error: 'Sesi tidak ditemukan.' }, { status: 404 })
   }
-  if (session.status !== 'signed_off') {
+  if (session.status === 'uploading') {
     return NextResponse.json(
-      { error: 'Laporan hanya tersedia untuk sesi yang sudah ditandatangani.' },
+      { error: 'Laporan belum tersedia — sesi masih dalam tahap upload.' },
       { status: 400 },
     )
   }

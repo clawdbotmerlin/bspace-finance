@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, CheckCircle2, XCircle, AlertTriangle, MinusCircle,
-  RefreshCw, Send, Loader2, AlertCircle, Banknote, Tag, EyeOff,
+  RefreshCw, FileDown, Loader2, AlertCircle, Banknote, Tag, EyeOff,
   Upload, Trash2, PlusCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -149,7 +149,7 @@ export default function ReviewPage() {
   const [error, setError] = useState('')
   const [tab, setTab] = useState<ReviewTab>('all')
   const [rerunning, setRerunning] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [showRerunConfirm, setShowRerunConfirm] = useState(false)
   const [resolveTarget, setResolveTarget] = useState<Discrepancy | null>(null)
 
@@ -222,13 +222,19 @@ export default function ReviewPage() {
     } finally { setRerunning(false) }
   }
 
-  async function handleSubmit() {
-    setSubmitting(true)
+  async function handleDownloadPDF() {
+    setDownloading(true)
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/submit`, { method: 'POST' })
-      if (!res.ok) { const d = await res.json(); setError(d.error ?? 'Gagal.'); return }
-      setSession((await res.json()).session)
-    } finally { setSubmitting(false) }
+      const res = await fetch(`/api/sessions/${sessionId}/report`)
+      if (!res.ok) { const d = await res.json(); setError(d.error ?? 'Gagal mengunduh laporan.'); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `laporan-rekonsiliasi-${sessionId}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally { setDownloading(false) }
   }
 
   function handleDiscUpdated(updated: Discrepancy) {
@@ -378,8 +384,8 @@ export default function ReviewPage() {
             <Button variant="outline" size="sm" onClick={() => setShowRerunConfirm(true)} disabled={rerunning || isReadOnly} className="gap-1.5">
               {rerunning ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Memproses...</> : <><RefreshCw className="w-3.5 h-3.5" />Jalankan Ulang</>}
             </Button>
-            <Button size="sm" onClick={handleSubmit} disabled={submitting || isReadOnly} className="gap-1.5">
-              {submitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Mengirim...</> : <><Send className="w-3.5 h-3.5" />Submit TTD</>}
+            <Button size="sm" onClick={handleDownloadPDF} disabled={downloading} className="gap-1.5">
+              {downloading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Mengunduh...</> : <><FileDown className="w-3.5 h-3.5" />Export PDF</>}
             </Button>
             <button
               onClick={() => setShowDeleteConfirm(true)}

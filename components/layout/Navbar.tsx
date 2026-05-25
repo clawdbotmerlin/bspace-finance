@@ -32,7 +32,6 @@ const NAV_ITEMS = [
   { href: '/accounting', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'finance', 'manager'], module: 'accounting' },
   { href: '/accounting/sessions/new', label: 'Rekonsiliasi Baru', icon: Plus, roles: ['admin', 'finance'], module: 'accounting' },
   { href: '/accounting/history', label: 'Riwayat', icon: History, roles: ['admin', 'finance', 'manager'], module: 'accounting' },
-  { href: '/accounting/signoff', label: 'Persetujuan', icon: ClipboardCheck, roles: ['admin', 'manager'], module: 'accounting' },
   { href: '/accounting/discrepancies', label: 'Diskrepansi', icon: AlertTriangle, roles: ['admin', 'finance'], module: 'accounting' },
   { href: '/accounting/admin/master-data', label: 'Data Master', icon: Database, roles: ['admin'], module: 'accounting' },
   { href: '/accounting/admin/audit-log', label: 'Log Audit', icon: ScrollText, roles: ['admin'], module: 'accounting' },
@@ -184,21 +183,6 @@ export function Navbar({ userName, userRole }: NavbarProps) {
                 </div>
               ) : (
                 <>
-                  {notifs.pendingSignoff > 0 && (
-                    <DropdownMenuItem asChild>
-                      <Link href="/accounting/signoff" className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer">
-                        <div className="mt-0.5 h-6 w-6 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
-                          <ClipboardList className="h-3.5 w-3.5 text-blue-400" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium">Menunggu Persetujuan</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
-                            {notifs.pendingSignoff} sesi perlu ditanda tangani
-                          </p>
-                        </div>
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
                   {notifs.openDiscrepancies > 0 && (
                     <DropdownMenuItem asChild>
                       <Link href="/accounting/discrepancies" className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer">
