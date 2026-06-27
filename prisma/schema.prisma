@@ -230,12 +230,23 @@ model Discrepancy {
 
 // ─── Villa Analytics ─────────────────────────────────────────────────────────
 
+model VillaHost {
+  id        String         @id @default(cuid())
+  name      String         @unique
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  uploads   VillaUpload[]
+  bookings  VillaBooking[]
+}
+
 model VillaUpload {
   id           String        @id @default(cuid())
   fileName     String
   uploadedAt   DateTime      @default(now())
   uploadedById String
   uploadedBy   User          @relation(fields: [uploadedById], references: [id])
+  hostId       String
+  host         VillaHost     @relation(fields: [hostId], references: [id])
   bookings     VillaBooking[]
 }
 
@@ -243,6 +254,8 @@ model VillaBooking {
   id                String      @id @default(cuid())
   uploadId          String
   upload            VillaUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  hostId            String
+  host              VillaHost   @relation(fields: [hostId], references: [id])
   status            String
   checkIn           DateTime    @db.Date
   checkOut          DateTime    @db.Date
@@ -256,7 +269,7 @@ model VillaBooking {
   numberOfGuests    Int
   createdAt         DateTime    @default(now())
 
-  @@unique([listingId, checkIn])
+  @@unique([hostId, listingId, checkIn])
 }
 
 // ─── Audit ────────────────────────────────────────────────────────────────────

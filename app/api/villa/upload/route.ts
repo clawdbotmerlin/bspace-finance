@@ -5,8 +5,16 @@ import { parseVillaBookingCsv } from '@/lib/parsers/villaBooking'
 
 export const POST = withAuth(async (req: NextRequest, session) => {
   const formData = await req.formData()
-  const file = formData.get('file') as File | null
-  if (!file) return NextResponse.json({ error: 'File wajib diisi.' }, { status: 400 })
+  const file   = formData.get('file')   as File   | null
+  const hostId = formData.get('hostId') as string | null
+
+  if (!file)   return NextResponse.json({ error: 'File wajib diisi.' },       { status: 400 })
+  if (!hostId) return NextResponse.json({ error: 'Pilih host terlebih dahulu.' }, { status: 400 })
+
+  const host = await prisma.villaHost.findUnique({ where: { id: hostId } })
+  if (!host || !host.isActive) {
+    return NextResponse.json({ error: 'Host tidak valid atau tidak aktif.' }, { status: 400 })
+  }
 
   const buffer = await file.arrayBuffer()
   const result = parseVillaBookingCsv(buffer)
@@ -18,10 +26,11 @@ export const POST = withAuth(async (req: NextRequest, session) => {
     )
   }
 
-  // Pre-check which bookings already exist so we can report new vs updated
+  // Pre-check which bookings already exist for this host
   const existingKeys = new Set(
     (await prisma.villaBooking.findMany({
       where: {
+        hostId,
         OR: result.bookings.map((b) => ({
           listingId: b.listingId,
           checkIn: new Date(b.checkIn),
@@ -35,6 +44,7 @@ export const POST = withAuth(async (req: NextRequest, session) => {
     data: {
       fileName: file.name,
       uploadedById: (session.user as { id: string }).id,
+      hostId,
     },
   })
 
@@ -45,7 +55,8 @@ export const POST = withAuth(async (req: NextRequest, session) => {
     const isExisting = existingKeys.has(`${b.listingId}::${b.checkIn}`)
     await prisma.villaBooking.upsert({
       where: {
-        listingId_checkIn: {
+        hostId_listingId_checkIn: {
+          hostId,
           listingId: b.listingId,
           checkIn: new Date(b.checkIn),
         },
@@ -64,6 +75,7 @@ export const POST = withAuth(async (req: NextRequest, session) => {
       },
       create: {
         uploadId: upload.id,
+        hostId,
         status: b.status,
         checkIn: new Date(b.checkIn),
         checkOut: new Date(b.checkOut),

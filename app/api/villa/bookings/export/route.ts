@@ -670,16 +670,18 @@ function buildGlobalSheet(
 export const GET = withAuth(async (req: NextRequest) => {
   const { searchParams } = req.nextUrl
   const listingFilter = searchParams.get('listing')
-  const from = searchParams.get('from')
-  const to   = searchParams.get('to')
+  const from   = searchParams.get('from')
+  const to     = searchParams.get('to')
+  const hostId = searchParams.get('hostId')
 
   const bookings = await prisma.villaBooking.findMany({
     where: {
+      ...(hostId        ? { hostId }                                              : {}),
+      ...(listingFilter ? { listing: { contains: listingFilter, mode: 'insensitive' } } : {}),
       checkIn: {
         ...(from ? { gte: new Date(from) } : {}),
         ...(to   ? { lte: new Date(to)   } : {}),
       },
-      ...(listingFilter ? { listing: { contains: listingFilter, mode: 'insensitive' } } : {}),
     },
     orderBy: { checkIn: 'asc' },
   })

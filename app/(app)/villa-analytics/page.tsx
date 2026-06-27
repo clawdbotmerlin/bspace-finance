@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { BarChart3, Upload, Download, X, FileText, AlertCircle, CheckCircle2, Loader2, Search, Calendar, ChevronDown } from 'lucide-react'
+import { BarChart3, Upload, Download, X, FileText, AlertCircle, CheckCircle2, Loader2, Search, Calendar, ChevronDown, Building2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface VillaHost {
+  id: string
+  name: string
+  isActive: boolean
+  _count?: { bookings: number }
+}
 
 interface VillaBooking {
   id: string
@@ -91,20 +98,33 @@ function UploadModal({
   open,
   onClose,
   onSuccess,
+  hosts,
 }: {
   open: boolean
   onClose: () => void
   onSuccess: () => void
+  hosts: VillaHost[]
 }) {
   const [file, setFile] = useState<File | null>(null)
+  const [hostId, setHostId] = useState('')
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const activeHosts = hosts.filter((h) => h.isActive)
+
+  // Pre-select if only one active host
+  useEffect(() => {
+    if (open && activeHosts.length === 1 && !hostId) {
+      setHostId(activeHosts[0].id)
+    }
+  }, [open, activeHosts, hostId])
+
   function reset() {
     setFile(null)
+    setHostId(activeHosts.length === 1 ? activeHosts[0].id : '')
     setResult(null)
     setError('')
     setUploading(false)
@@ -126,12 +146,13 @@ function UploadModal({
   }
 
   async function handleUpload() {
-    if (!file) return
+    if (!file || !hostId) return
     setUploading(true)
     setError('')
     try {
       const fd = new FormData()
       fd.append('file', file)
+      fd.append('hostId', hostId)
       const res = await fetch('/api/villa/upload', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) {
@@ -146,6 +167,8 @@ function UploadModal({
       setUploading(false)
     }
   }
+
+  const selectedHost = activeHosts.find((h) => h.id === hostId)
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
@@ -163,6 +186,9 @@ function UploadModal({
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-emerald-800">Upload berhasil</p>
+                {selectedHost && (
+                  <p className="text-xs text-emerald-700 mt-0.5">Host: <span className="font-semibold">{selectedHost.name}</span></p>
+                )}
                 <p className="text-xs text-emerald-700 mt-1">
                   <span className="font-semibold">{result.created}</span> booking baru ditambahkan
                 </p>
@@ -190,6 +216,36 @@ function UploadModal({
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Host selector */}
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                Host <span className="text-red-500">*</span>
+              </label>
+              {activeHosts.length === 0 ? (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  Belum ada host aktif. Tambahkan di halaman Kelola Host.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {activeHosts.map((h) => (
+                    <button
+                      key={h.id}
+                      onClick={() => setHostId(h.id)}
+                      className={cn(
+                        'px-3 py-2 rounded-lg border text-sm font-medium transition-colors text-left',
+                        hostId === h.id
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-slate-50'
+                      )}
+                    >
+                      {h.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Drop zone */}
             <div
               className={cn(
@@ -249,7 +305,7 @@ function UploadModal({
               </Button>
               <Button
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-                disabled={!file || uploading}
+                disabled={!file || !hostId || uploading}
                 onClick={handleUpload}
               >
                 {uploading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -266,26 +322,36 @@ function UploadModal({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function VillaAnalyticsPage() {
+  const [hosts, setHosts] = useState<VillaHost[]>([])
   const [bookings, setBookings] = useState<VillaBooking[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
   const [filterListing, setFilterListing] = useState('')
+  const [filterHostId, setFilterHostId] = useState('')
   const [activePreset, setActivePreset] = useState<Preset>('')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportingSummary, setExportingSummary] = useState(false)
   const [exportingTable, setExportingTable] = useState(false)
 
+  useEffect(() => {
+    fetch('/api/villa/hosts')
+      .then((r) => r.json())
+      .then(setHosts)
+      .catch(() => {})
+  }, [])
+
   const fetchBookings = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
       const params = new URLSearchParams()
-      if (filterFrom) params.set('from', filterFrom)
-      if (filterTo) params.set('to', filterTo)
+      if (filterFrom)   params.set('from', filterFrom)
+      if (filterTo)     params.set('to', filterTo)
       if (filterListing) params.set('listing', filterListing)
+      if (filterHostId) params.set('hostId', filterHostId)
       const res = await fetch(`/api/villa/bookings?${params}`)
       if (!res.ok) throw new Error('Gagal memuat data.')
       setBookings(await res.json())
@@ -294,26 +360,27 @@ export default function VillaAnalyticsPage() {
     } finally {
       setLoading(false)
     }
-  }, [filterFrom, filterTo, filterListing])
+  }, [filterFrom, filterTo, filterListing, filterHostId])
 
   useEffect(() => {
     const t = setTimeout(fetchBookings, filterListing ? 300 : 0)
     return () => clearTimeout(t)
   }, [fetchBookings])
 
+  function buildParams() {
+    const params = new URLSearchParams()
+    if (filterFrom)   params.set('from', filterFrom)
+    if (filterTo)     params.set('to', filterTo)
+    if (filterListing) params.set('listing', filterListing)
+    if (filterHostId) params.set('hostId', filterHostId)
+    return params
+  }
+
   async function handleExport() {
     setExporting(true)
     try {
-      const params = new URLSearchParams()
-      if (filterFrom) params.set('from', filterFrom)
-      if (filterTo) params.set('to', filterTo)
-      if (filterListing) params.set('listing', filterListing)
-      const res = await fetch(`/api/villa/bookings/export?${params}`)
-      if (!res.ok) {
-        const d = await res.json()
-        alert(d.error ?? 'Export gagal.')
-        return
-      }
+      const res = await fetch(`/api/villa/bookings/export?${buildParams()}`)
+      if (!res.ok) { const d = await res.json(); alert(d.error ?? 'Export gagal.'); return }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -329,16 +396,8 @@ export default function VillaAnalyticsPage() {
   async function handleTableExport() {
     setExportingTable(true)
     try {
-      const params = new URLSearchParams()
-      if (filterFrom) params.set('from', filterFrom)
-      if (filterTo) params.set('to', filterTo)
-      if (filterListing) params.set('listing', filterListing)
-      const res = await fetch(`/api/villa/bookings/table-export?${params}`)
-      if (!res.ok) {
-        const d = await res.json()
-        alert(d.error ?? 'Export gagal.')
-        return
-      }
+      const res = await fetch(`/api/villa/bookings/table-export?${buildParams()}`)
+      if (!res.ok) { const d = await res.json(); alert(d.error ?? 'Export gagal.'); return }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -354,16 +413,8 @@ export default function VillaAnalyticsPage() {
   async function handleSummaryExport() {
     setExportingSummary(true)
     try {
-      const params = new URLSearchParams()
-      if (filterFrom) params.set('from', filterFrom)
-      if (filterTo) params.set('to', filterTo)
-      if (filterListing) params.set('listing', filterListing)
-      const res = await fetch(`/api/villa/bookings/summary-report?${params}`)
-      if (!res.ok) {
-        const d = await res.json()
-        alert(d.error ?? 'Export gagal.')
-        return
-      }
+      const res = await fetch(`/api/villa/bookings/summary-report?${buildParams()}`)
+      if (!res.ok) { const d = await res.json(); alert(d.error ?? 'Export gagal.'); return }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -387,16 +438,15 @@ export default function VillaAnalyticsPage() {
     setFilterFrom('')
     setFilterTo('')
     setFilterListing('')
+    setFilterHostId('')
     setActivePreset('')
   }
 
-  // Unique listings in current result set (for per-listing export dropdown)
   const uniqueListings = Array.from(new Set(bookings.map((b) => b.listing))).sort()
 
   async function handleExportListing(listing: string) {
-    const params = new URLSearchParams({ listing })
-    if (filterFrom) params.set('from', filterFrom)
-    if (filterTo) params.set('to', filterTo)
+    const params = buildParams()
+    params.set('listing', listing)
     const res = await fetch(`/api/villa/bookings/export?${params}`)
     if (!res.ok) { alert('Export gagal.'); return }
     const blob = await res.blob()
@@ -411,6 +461,10 @@ export default function VillaAnalyticsPage() {
   const confirmedCount = bookings.filter((b) => b.status === 'confirmed').length
   const totalGross = bookings.reduce((s, b) => s + parseFloat(b.accommodationFare), 0)
   const totalPayout = bookings.reduce((s, b) => s + parseFloat(b.totalPayout), 0)
+
+  const selectedHostName = hosts.find((h) => h.id === filterHostId)?.name
+
+  const hasFilters = filterFrom || filterTo || filterListing || filterHostId
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -496,8 +550,47 @@ export default function VillaAnalyticsPage() {
           ))}
         </div>
 
-        {/* Date range + listing search */}
+        {/* Date range + listing search + host filter */}
         <div className="flex flex-wrap items-center gap-3">
+          {/* Host filter */}
+          {hosts.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    'gap-1.5 h-8 text-xs',
+                    filterHostId ? 'border-emerald-400 text-emerald-700 bg-emerald-50' : ''
+                  )}
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  {selectedHostName ?? 'Semua Host'}
+                  <ChevronDown className="w-3 h-3 ml-0.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[180px]">
+                <DropdownMenuItem
+                  onClick={() => setFilterHostId('')}
+                  className={cn('text-xs cursor-pointer', !filterHostId && 'font-semibold text-emerald-700')}
+                >
+                  Semua Host
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {hosts.map((h) => (
+                  <DropdownMenuItem
+                    key={h.id}
+                    onClick={() => setFilterHostId(h.id)}
+                    className={cn('text-xs cursor-pointer', filterHostId === h.id && 'font-semibold text-emerald-700')}
+                  >
+                    {h.name}
+                    {!h.isActive && <span className="ml-1 text-slate-400">(nonaktif)</span>}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <Calendar className="w-3.5 h-3.5" />
             Check-in dari
@@ -524,7 +617,7 @@ export default function VillaAnalyticsPage() {
               className="h-8 text-xs pl-8 w-52"
             />
           </div>
-          {(filterFrom || filterTo || filterListing) && (
+          {hasFilters && (
             <button
               onClick={resetFilters}
               className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
@@ -658,6 +751,7 @@ export default function VillaAnalyticsPage() {
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
         onSuccess={fetchBookings}
+        hosts={hosts}
       />
     </div>
   )

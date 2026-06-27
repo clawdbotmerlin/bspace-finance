@@ -450,14 +450,16 @@ export const GET = withAuth(async (req: NextRequest) => {
   const from          = searchParams.get('from')
   const to            = searchParams.get('to')
   const listingFilter = searchParams.get('listing')
+  const hostId        = searchParams.get('hostId')
 
   const bookings = await prisma.villaBooking.findMany({
     where: {
+      ...(hostId        ? { hostId }                                              : {}),
+      ...(listingFilter ? { listing: { contains: listingFilter, mode: 'insensitive' } } : {}),
       checkIn: {
         ...(from ? { gte: new Date(from) } : {}),
         ...(to   ? { lte: new Date(to)   } : {}),
       },
-      ...(listingFilter ? { listing: { contains: listingFilter, mode: 'insensitive' } } : {}),
     },
     orderBy: { checkIn: 'asc' },
   })
