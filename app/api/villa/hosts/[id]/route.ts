@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/guards'
 import { prisma } from '@/lib/db'
 
-export const PUT = withAuth(async (req: NextRequest, _session, { params }: { params: { id: string } }) => {
+export const PUT = withAuth(async (req: NextRequest) => {
+  const id = req.nextUrl.pathname.split('/').at(-1)!
   const { name, isActive } = await req.json()
-  const host = await prisma.villaHost.findUnique({ where: { id: params.id } })
+
+  const host = await prisma.villaHost.findUnique({ where: { id } })
   if (!host) return NextResponse.json({ error: 'Host tidak ditemukan.' }, { status: 404 })
 
   if (name !== undefined && name.trim() !== host.name) {
@@ -13,7 +15,7 @@ export const PUT = withAuth(async (req: NextRequest, _session, { params }: { par
   }
 
   const updated = await prisma.villaHost.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       ...(name !== undefined ? { name: name.trim() } : {}),
       ...(isActive !== undefined ? { isActive } : {}),
@@ -22,14 +24,16 @@ export const PUT = withAuth(async (req: NextRequest, _session, { params }: { par
   return NextResponse.json(updated)
 }, ['admin'])
 
-export const DELETE = withAuth(async (_req: NextRequest, _session, { params }: { params: { id: string } }) => {
-  const count = await prisma.villaBooking.count({ where: { hostId: params.id } })
+export const DELETE = withAuth(async (req: NextRequest) => {
+  const id = req.nextUrl.pathname.split('/').at(-1)!
+
+  const count = await prisma.villaBooking.count({ where: { hostId: id } })
   if (count > 0) {
     return NextResponse.json(
       { error: `Tidak dapat dihapus — masih ada ${count} booking terkait host ini.` },
       { status: 409 }
     )
   }
-  await prisma.villaHost.delete({ where: { id: params.id } })
+  await prisma.villaHost.delete({ where: { id } })
   return NextResponse.json({ ok: true })
 }, ['admin'])
