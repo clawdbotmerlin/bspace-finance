@@ -94,6 +94,18 @@ function statusVariant(s: string): 'success' | 'warning' | 'outline' {
 
 // ─── Upload Modal ─────────────────────────────────────────────────────────────
 
+function StepBadge({ n, done }: { n: number; done: boolean }) {
+  return done ? (
+    <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white shrink-0">
+      <CheckCircle2 className="w-3.5 h-3.5" />
+    </span>
+  ) : (
+    <span className="flex items-center justify-center w-5 h-5 rounded-full bg-slate-200 text-slate-600 text-[11px] font-bold shrink-0">
+      {n}
+    </span>
+  )
+}
+
 function UploadModal({
   open,
   onClose,
@@ -111,11 +123,12 @@ function UploadModal({
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState('')
+  const [hostHighlight, setHostHighlight] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const hostSectionRef = useRef<HTMLDivElement>(null)
 
   const activeHosts = hosts.filter((h) => h.isActive)
 
-  // Pre-select if only one active host
   useEffect(() => {
     if (open && activeHosts.length === 1 && !hostId) {
       setHostId(activeHosts[0].id)
@@ -128,6 +141,7 @@ function UploadModal({
     setResult(null)
     setError('')
     setUploading(false)
+    setHostHighlight(false)
   }
 
   function handleClose() {
@@ -146,7 +160,14 @@ function UploadModal({
   }
 
   async function handleUpload() {
-    if (!file || !hostId) return
+    if (!hostId) {
+      // Scroll to and highlight the host section
+      setHostHighlight(true)
+      hostSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setTimeout(() => setHostHighlight(false), 2000)
+      return
+    }
+    if (!file) return
     setUploading(true)
     setError('')
     try {
@@ -215,81 +236,124 @@ function UploadModal({
             <Button className="w-full" onClick={handleClose}>Tutup</Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {/* Host selector */}
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                Host <span className="text-red-500">*</span>
-              </label>
+          <div className="space-y-5">
+            {/* Step 1 — Host */}
+            <div ref={hostSectionRef}>
+              <div className="flex items-center gap-2 mb-2">
+                <StepBadge n={1} done={!!hostId} />
+                <span className={cn('text-xs font-semibold', hostId ? 'text-emerald-700' : 'text-slate-700')}>
+                  Pilih Host
+                </span>
+                {hostId && (
+                  <span className="ml-auto text-xs text-emerald-600 font-medium">{selectedHost?.name}</span>
+                )}
+              </div>
               {activeHosts.length === 0 ? (
                 <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                   Belum ada host aktif. Tambahkan di halaman Kelola Host.
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
+                <div className={cn(
+                  'grid gap-2 p-3 rounded-xl border-2 transition-all duration-300',
+                  activeHosts.length === 1 ? 'grid-cols-1' : 'grid-cols-2',
+                  hostHighlight
+                    ? 'border-amber-400 bg-amber-50 shadow-[0_0_0_3px_rgba(251,191,36,0.2)]'
+                    : hostId
+                    ? 'border-emerald-200 bg-emerald-50/40'
+                    : 'border-slate-200 bg-slate-50/50'
+                )}>
+                  {hostHighlight && (
+                    <p className="col-span-full text-xs text-amber-700 font-medium text-center -mt-1 mb-1">
+                      Pilih host terlebih dahulu
+                    </p>
+                  )}
                   {activeHosts.map((h) => (
                     <button
                       key={h.id}
-                      onClick={() => setHostId(h.id)}
+                      onClick={() => { setHostId(h.id); setHostHighlight(false) }}
                       className={cn(
-                        'px-3 py-2 rounded-lg border text-sm font-medium transition-colors text-left',
+                        'px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center gap-2',
                         hostId === h.id
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-slate-50'
+                          ? 'border-emerald-500 bg-white text-emerald-800 shadow-sm'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700'
                       )}
                     >
+                      <Building2 className={cn('w-3.5 h-3.5 shrink-0', hostId === h.id ? 'text-emerald-500' : 'text-slate-400')} />
                       {h.name}
+                      {hostId === h.id && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 ml-auto shrink-0" />}
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Drop zone */}
-            <div
-              className={cn(
-                'border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors',
-                dragging ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-emerald-300 hover:bg-slate-50',
-                file ? 'border-emerald-400 bg-emerald-50' : ''
-              )}
-              onClick={() => inputRef.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault()
-                setDragging(false)
-                const f = e.dataTransfer.files[0]
-                if (f) handleFile(f)
-              }}
-            >
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
-              />
-              {file ? (
-                <div className="flex items-center justify-center gap-2">
-                  <FileText className="w-5 h-5 text-emerald-600" />
-                  <span className="text-sm font-medium text-emerald-800">{file.name}</span>
-                  <button
-                    className="p-0.5 rounded hover:bg-emerald-100"
-                    onClick={(e) => { e.stopPropagation(); setFile(null) }}
-                  >
-                    <X className="w-3.5 h-3.5 text-emerald-600" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <Upload className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm text-slate-500">
-                    Drag &amp; drop file CSV di sini, atau <span className="text-emerald-600 font-medium">pilih file</span>
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">Hanya .csv (Guesty export)</p>
-                </>
-              )}
+            {/* Divider */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-slate-200" />
+            </div>
+
+            {/* Step 2 — File */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <StepBadge n={2} done={!!file} />
+                <span className={cn('text-xs font-semibold', file ? 'text-emerald-700' : 'text-slate-700')}>
+                  Upload File CSV
+                </span>
+                {file && (
+                  <span className="ml-auto text-xs text-slate-500 truncate max-w-[160px]">{file.name}</span>
+                )}
+              </div>
+              <div
+                className={cn(
+                  'border-2 border-dashed rounded-xl p-6 text-center transition-colors',
+                  hostId ? 'cursor-pointer' : 'cursor-default opacity-60',
+                  dragging ? 'border-emerald-400 bg-emerald-50' : file ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200',
+                  hostId && !file ? 'hover:border-emerald-300 hover:bg-slate-50' : ''
+                )}
+                onClick={() => { if (hostId) inputRef.current?.click() }}
+                onDragOver={(e) => { if (!hostId) return; e.preventDefault(); setDragging(true) }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDragging(false)
+                  if (!hostId) return
+                  const f = e.dataTransfer.files[0]
+                  if (f) handleFile(f)
+                }}
+              >
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
+                />
+                {file ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <FileText className="w-5 h-5 text-emerald-600" />
+                    <span className="text-sm font-medium text-emerald-800 truncate max-w-[220px]">{file.name}</span>
+                    <button
+                      className="p-0.5 rounded hover:bg-emerald-100 shrink-0"
+                      onClick={(e) => { e.stopPropagation(); setFile(null) }}
+                    >
+                      <X className="w-3.5 h-3.5 text-emerald-600" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className={cn('w-7 h-7 mx-auto mb-2', hostId ? 'text-slate-300' : 'text-slate-200')} />
+                    {hostId ? (
+                      <p className="text-sm text-slate-500">
+                        Drag &amp; drop file CSV di sini, atau <span className="text-emerald-600 font-medium">pilih file</span>
+                      </p>
+                    ) : (
+                      <p className="text-sm text-slate-400">Pilih host dulu di atas</p>
+                    )}
+                    <p className="text-xs text-slate-400 mt-1">Hanya .csv (Guesty export)</p>
+                  </>
+                )}
+              </div>
             </div>
 
             {error && (
@@ -305,7 +369,7 @@ function UploadModal({
               </Button>
               <Button
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-                disabled={!file || !hostId || uploading}
+                disabled={!file || uploading}
                 onClick={handleUpload}
               >
                 {uploading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
